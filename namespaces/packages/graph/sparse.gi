@@ -1,21 +1,98 @@
-#Class(sparse_nth3, BaseOperation, rec(
-#    __call__ := (self,x, list, size) >> WithBases(self,
-#        rec(operations := NthOps,
-#            x := x,
-#			list := list,
-#			size := size)),
-#	  
-#	  eval := meth(self)
-#		local result;
-#		result := var.fresh_t("result", TInt);
-#		return decl[result]
-#
-#));
+Class(DenseScalarProduct, BaseOperation, rec(
+  __call__ := (self, rv) >> SPL(WithBases(self, rec(
+    rv := rv,
+    _children := [rv]
+  ))),
+  dims := self >> [self.rv.element.domain(), V(1)],
+  from_rChildren := (self, rch) >> CopyFields(self, rec(_children := rch)),
+  doNotMarkBB := true,
+  print := (self, i, is) >> Print(
+        self.name, "(", self.rv, ")")
+));
 
-Class(TPair, CompositeTyp, rec(
-	__call__ := (self) >> WithBases(self,
-	rec( operations := TypOps)),
-    print := self >> Print(self.name),
+Class(SparseScalarProduct, BaseOperation, rec(
+  __call__ := (self, rv) >> SPL(WithBases(self, rec(
+    rv := rv,
+    _children := [rv]
+  ))),
+  dims := self >> [self.rv.element.domain(), V(1)],
+  from_rChildren := (self, rch) >> CopyFields(self, rec(_children := rch)),
+  doNotMarkBB := true,
+  print := (self, i, is) >> Print(
+        self.name, "(", self.rv, ")")
+));
+
+
+
+Class(sparse_nth3, Loc, rec(
+    __call__ := (self, list, idx) >> WithBases(self,
+        rec(operations := NthOps,
+			list := list,
+            idx := toExpArg(idx))).setType().cfold(),
+
+    can_fold := self >> self.idx _is funcExp or (IsValue(self.idx) and
+                  (IsValue(self.list) or (IsVar(self.list) and IsBound(self.list.var)) or self.list _is apack)),
+    cfold := self >> When(self.can_fold(), self.eval(), self),
+ 
+    rChildren := self >> [self.list, self.idx],
+    rSetChild := rSetChildFields("list", "idx"),
+	
+	eval := meth(self)
+		local result, iterator;
+		result := 0;
+		iterator := 1;
+		while iterator <= Length(self.list.var) and result = 0 do
+			if self.idx = self.list.var[iterator].pair.first then
+				#Print("if\n");
+				result := self.list.var[iterator].pair.second;
+				iterator := iterator + 1;
+				#Print(iterator);
+			else
+				#Print("else\n");
+				result := V(0);
+				iterator := iterator + 1;
+				#Print(iterator);
+			fi;
+		od;
+		return result;
+		end,
+		
+	#	result := var.fresh_t("result", TInt);
+	#	g := var.fresh_t("g", TInt);
+	#	decl[result, g], chain(
+	#	loopf(g, V(1), Length(fds.var),
+	#	chain(IF(eq(x, fds.var[g].pair.first), 
+	#	assign(result,fds.var[g].pair.second), 
+	#	assign(result,V(0))))), 
+	#	return result);
+	#  end;
+
+    computeType := self >> Cond(
+	IsArrayT(self.list.range()), self.list.range(),
+        ObjId(self.list.t) = TSym, TSym("Containee"), #used with C++ container objects (EnvList)
+        self.list.t = TUnknown,  self.list.range(),
+	Error("Unknown types of 1st argument <self.list> in ", ObjId(self))
+    ),
+));
+
+
+Class(TStruct, CompositeTyp, rec(
+	__call__ := arg >> let(
+	self := arg[1],
+	fields := CopyFields(arg[2]),
+	WithBases(self,
+	rec(fields := fields, operations := TypOps))),
+    print := self >> Print(self.name,"(", self.fields.name, ", ", self.fields.key, ", ", self.fields.val, ")"),
+));
+
+Class(TPair, TStruct, rec(
+   __call__ := arg >> let(
+   self := arg[1],
+   pair := CopyFields(arg[2]),
+   WithBases(self, 
+   rec(pair := pair, operations := TypOps))),
+   
+   print := self >> Print(self.name,"(",self.pair.first,", ", self.pair.second,")"),
 ));
 
 
@@ -143,15 +220,16 @@ Class(FDataSparseOfs, Function, rec(
 Class(FDataSparse, Function, rec(
    __call__ := arg >> let(
        self := arg[1],
-       object := Cond(Length(arg) = 3, When(IsArrayT(arg[3]), arg[3], V(0))),
-	   _val := Cond(Length(arg)=3, When(IsList(arg[2]), arg[2], [arg[2]]),
-                               Drop(arg, 1)),
-       val := When(Length(_val)=1 and IsLoc(_val[1]), _val[1], V(_val)),
-       datavar := Cond(IsLoc(val), val,
-                   Dat(val.t).setValue(val)),
-       WithBases(self, rec(var := datavar, object := object, operations := PrintOps))),
+       object := arg[2],
+	   #_val := Cond(Length(arg)=3, When(IsList(arg[3]), arg[3], [arg[3]]),
+       #                        Drop(arg, 1)),
+       #val := When(Length(_val)=1 and IsLoc(_val[1]), _val[1], V(_val)),
+       #datavar := Cond(IsLoc(val), val,
+       #            Dat(val.t).setValue(val)),
+       var := Cond(IsList(arg[3]), arg[3], [arg[3]]),
+	   WithBases(self, rec(var := var, object := object, operations := PrintOps))),
 
-   print := self >> Print(self.name, "(", self.var, ")"),
+   print := self >> Print(self.name, "(", self.object, ", ", self.var, ")"),
    rChildren := self >> [ self.var ],
    rSetChild := rSetChildFields("var"),
 
@@ -166,17 +244,21 @@ Class(FDataSparse, Function, rec(
 	return result;
 	end,
 
-   tolist3 := self >> When(IsBound(self.var), self.var, self.lambda3().tolist3()),
-   lambda3 := self >> let(x := Ind(self.domain()), Lambda(x, sparse_nth(self.var, x))),
-   at := (self, n) >> When(IsInt(n), self.var.value.v[n+1], self.lambda().at(n)),
-   at2 := (self, n) >> When(IsInt(n), self.var2.value.v[n+1], self.lambda().at(n)),
-   tolist := self >> When(IsBound(self.var.value), self.var.value.v, self.lambda().tolist()),
-   tolist2 := self >> When(IsBound(self.var2.value), self.var2.value.v, self.lambda2().tolist()),
-   lambda := self >> let(x := Ind(self.domain()), Lambda(x, nth(self.var, x))),
-   lambda2 := self >> let(x := Ind(self.domain()), Lambda(x, nth(self.var2, x))),
 
-   domain := self >> self.var.t.size,
-   range := self >> self.var.t.t,
+   #at := (self, n) >> When(IsInt(n), self.var.value.v[n+1], self.lambda().at(n)),
+   at := (self, n) >> self.lambda().at(n),
+   #tolist := self >> When(IsBound(self.var.value), self.var.value.v, self.lambda().tolist()),
+   tolist := self >> self.lambda().tolist(),
+   lambda := self >> let(x := Ind(self.domain()), Lambda(x, sparse_nth3(self, x))),
+   
+   #tolist3 := self >> When(IsBound(self.var), self.var, self.lambda3().tolist3()),
+   #lambda3 := self >> let(x := Ind(self.domain()), Lambda(x, sparse_nth(self.var, x))),
+   #at2 := (self, n) >> When(IsInt(n), self.var2.value.v[n+1], self.lambda().at(n)),
+   #tolist2 := self >> When(IsBound(self.var2.value), self.var2.value.v, self.lambda2().tolist()),
+   #lambda2 := self >> let(x := Ind(self.domain()), Lambda(x, nth(self.var2, x))),
+
+   domain := self >> self.object.size,
+   range := self >> self.object.t,
 
    inline := true,
    free := self >> Set([]),
@@ -262,9 +344,42 @@ CUnparser.if4 := (self,o,i,is) >> Print(Blanks(i),
     "if (", self(o.if_cond,i,is), ") {\n", self(o.if_cmd,i+is,is), Blanks(i), "}",
     " else {\n", self(o.else_cmd,i+is,is), Blanks(i), "}\n");
 
+DefaultSumsGen.DenseScalarProduct := (self, o, opts) >> o;
+
+DefaultSumsGen.SparseScalarProduct := (self, o, opts) >> o;
+
 DefaultSumsGen.TSparse := (self, o, opts) >> o;
 
 DefaultSumsGen.sparse_nth2 := (self, o, opts) >> o;
+
+
+DefaultCodegen.DenseScalarProduct := meth(self, o, y, x, opts)
+	local arr, itr, size;
+	arr := var.fresh_t("arr", TArray(o.rv.element.object.t.t, o.rv.element.object.size));
+	itr := var.fresh_t("itr", TInt);
+	return data(arr, V(o.rv.element.tolist()), decl([], chain(
+		assign(y, V(0)),
+		assign(itr, V(0)),
+		loopw(lt(itr, o.rv.element.object.size),
+		chain(
+			if1(neq(nth(arr, itr), V(0)), chain(
+			assign(y, add(deref(y), mul(nth(arr, itr), nth(x, itr)))),
+			assign(itr, add(itr, V(1))))))))));
+	end;
+
+DefaultCodegen.SparseScalarProduct := meth(self, o, y, x, opts)
+	local arr, itr, size;
+	arr := var.fresh_t("arr", TArray(o.rv.element.object.t.t, o.rv.element.object.size));
+	itr := var.fresh_t("itr", TInt);
+	return data(arr, V(o.rv.element.tolist()), decl([], chain(
+		assign(y, V(0)),
+		assign(itr, V(0)),
+		loopw(lt(itr, o.rv.element.object.size),
+		chain(
+			if1(logic_and(neq(nth(arr, itr), V(0)),neq(nth(x, itr), V(0))), chain(
+			assign(y, add(deref(y), mul(nth(arr, itr), nth(x, itr)))),
+			assign(itr, add(itr, V(1))))))))));
+	end;
 
 DefaultCodegen.TSparse := meth(self, o, y, x, opts) 
 	local row, values;
