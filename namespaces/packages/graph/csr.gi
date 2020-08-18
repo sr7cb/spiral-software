@@ -117,5 +117,6 @@ TCDefaults := CopyFields(SpiralDefaults, rec(
   Y := var("res", TPtr(TInt)),
   YType := TPtr(TInt),
   isCSR := true,
+  includes := ["<include/sparse.h>"],
 ));
 
