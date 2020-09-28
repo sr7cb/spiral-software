@@ -300,11 +300,35 @@ Class(struct_nth, nth, rec(
 		loc := loc,
 		elem := elem,
 		idx := idx,
+		t := Checked(IsType(idx.t), idx.t),
 		operations := NthOps
 	)),
 	rChildren := self >> [self.loc, self.elem, self.idx],
 	rSetChild := rSetChildFields("loc", "elem", "idx"),
 	#print := (self, i, si) >> Print(self.name, "
+));
+
+Class(RowVec2, RowVec, rec(
+	init := self >> let(
+		result := var.fresh_t("result", TInt),
+		assign(result, V(0))
+	),
+
+	traversal := (self, sa, body) >> let(
+			itr := var.fresh_t("itr", TInt),
+			loopw(neq(struct_nth(sa, "index", itr), NULL(TInt)), chain(
+				body
+			))
+	),
+));
+
+Class(NULL, Command, rec(
+__call__ := (self, t) >> WithBases(self, rec(
+	t    := Checked(IsType(t), t),
+    operations := CmdOps
+  )),
+ 	rChildren := self >> [],
+	print := (self, i, si) >> Print(self.__name__)
 ));
 
 Class(TSparse, TArrayBase, rec(
@@ -325,19 +349,22 @@ Class(TSparse, TArrayBase, rec(
 	print := self >> Print(self.__name__, "(", self.t, ", ", self.ring, ", ", self.size, ")"),
 
 	get_iterator := self >> let( 
-		itr := var.fresh_t("itr",TInt),
-		decl([itr], chain(
-		assign(itr, V(0))))),
+		itr := var.fresh_t("itr",TInt),itr),
 	
 	num_nonzeros := (self, x) >> let( 
 		itr := var.fresh_t("itr", TInt),
 		result := var.fresh_t("result", TInt),
 		decl([itr, result], chain(
 		assign(result, V(0)),
-		loopw(neq(struct_nth(x,"value", itr), "NULL"), chain(
+		loopw(neq(struct_nth(x,"value", itr), NULL(TInt)), chain(
 		if1(neq(struct_nth(x,"value", itr), V(0)), chain(
 			assign(result, add(result, V(1)))))))))),
 ));
+
+Class(T_Sparse, T_Type, rec(
+       t := TInt,
+));
+
 
 
 Class(if4, Command, rec(
@@ -365,6 +392,8 @@ CUnparser.struct_nth := (self,o,i,is) >> Print(Blanks(i),
 CUnparser.if4 := (self,o,i,is) >> Print(Blanks(i),
     "if (", self(o.if_cond,i,is), ") {\n", self(o.if_cmd,i+is,is), Blanks(i), "}",
     " else {\n", self(o.else_cmd,i+is,is), Blanks(i), "}\n");
+
+CUnparser.NULL := (self, o, i, is) >> Print(Blanks(i), "NULL");
 
 #Class(sparse_nth, Command, rec(
 #  __call__ := (self, loc, idx) >> WithBases(self, rec(
@@ -396,18 +425,32 @@ DefaultSumsGen.TSparse := (self, o, opts) >> o;
 
 DefaultSumsGen.sparse_nth2 := (self, o, opts) >> o;
 
+DefaultSumsGen.RowVec2 := (self, o, opts) >> o;
 
+
+#DefaultCodegen.RowVec2 := meth(self, o, y, x, opts)
+#	local body, result, sa;
+#	sa := var.fresh_t("sa", TArray(TInt, o.element.object.size));
+#	result := var.fresh_t("result", TInt);
+#	body := assign(y , itr);
+#	return decl([result, sa], chain(
+#		assign(result, V(0)),
+#		o.traversal(sa, body)
+#	));
+#	end;
+#
 DefaultCodegen.NewScalarProduct := meth(self, o, y, x, opts) 
 	local itr, num_nz;
-	#itr := o.rv.element.object.get_iterator();
-	#num_nz := o.rv.element.object.num_nonzeros("sa2");
+	itr := o.rv.element.object.get_iterator();
+	num_nz := o.rv.element.object.num_nonzeros("sa2");
 	#return decl([itr], chain(
 	return decl([], chain(
-		assign(Y, V(0))
-		#loopw(lt(itr, num_nz),
-		#chain(
-	#))
-	));
+		assign(y, V(0)),
+		assign(itr, V(0)),
+		loopw(lt(itr, o.rv.element.object.size), chain(
+		if1(logic_and(neq(struct_nth(x, "value", itr), V(0)),neq(struct_nth("sa2", "value", itr), V(0))), chain(
+			assign(y, add(deref(y), mul(struct_nth(x, "value", itr), struct_nth("sa2", "value", itr)))),
+			assign(itr, add(itr, V(1)))))))));	
 	end;
 
 #if1(neq(struct_nth(x, "value", itr), V(0)), chain(
@@ -464,8 +507,8 @@ DefaultCodegen.sparse_nth2 := meth(self, o, y, x, opts)
 
 SparseDefaults := CopyFields(SpiralDefaults, rec(
   compileStrategy := GraphIndicesCS,
-  X := var("sa", TPtr(TSparse(TArray(TInt,1), TSemiring_Arithmetic, 1))),
-  XType := TPtr(TSparse(TArray(TInt,1), TSemiring_Arithmetic, 1)),
+  X := var("sa", TPtr(TSparse(TArray(TInt, 1), TSemiring_Arithmetic, 1))),
+  XType := TPtr(TSparse(TArray(TInt, 1), TSemiring_Arithmetic, 1)),
   arrayDataModifier := "",
   arrayBufModifier := "",
   Y := var("res", TPtr(TInt)),

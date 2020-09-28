@@ -1,0 +1,11 @@
+Load(graph);
+Import(graph);
+p1 := TPair(rec(first := V(1), second := V(2)));
+p2 := TPair(rec(first := V(3), second := V(4)));
+ts := TSparse(TArray(TInt, 5), TSemiring_Arithmetic, 5);
+fds := FDataSparse(ts, [p1,p2]);
+rv := RowVec(fds);
+dsp := DenseScalarProduct(rv);
+dsp.ruletree := rec();
+cs := CodeSums(dsp, SpiralDefaults);
+PrintCode("", cs, SpiralDefaults);

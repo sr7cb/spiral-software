@@ -1,0 +1,12 @@
+Load(graph);
+Import(graph);
+ts := TSparse(TArray(TInt, 5), TSemiring_Arithmetic, 5);
+fdos := FDataSparse(ts, 5, 0);
+rv := RowVec(fdos);
+nsp := NewScalarProduct(rv);
+nsp.ruletree := rec();
+#cs := CodeSums(nsp, TCDefaults);
+#PrintCode("", cs, TCDefaults);
+cs := CodeSums(nsp, SparseDefaults);
+PrintCode("", cs, SparseDefaults);
+

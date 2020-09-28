@@ -1,6 +1,5 @@
 # General
 .gap_history
-namespaces/packages
 profiler/tempdirs
 gap/src/machine_endian.h
 /build*
