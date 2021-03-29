@@ -340,9 +340,13 @@ Class(sparse_nth2, BaseOperation, rec(
 ));
 
 
-Class(INF, Symbolic, rec(
-	__call__ := self >> SPL(WithBases(self, rec())),
-));
+#Class(GathPtr, Gath, rec(
+#    rChildren := self >> [self.ptr, self.func],
+#    rSetChild := rSetChildFields("ptr", "func"),
+#    new := (self, ptr, func) >> SPL(WithBases(self, rec(
+#        ptr := ptr,
+#      	func := Checked(IsFunction(func) or IsFuncExp(func), func)))).setDims()
+#));
 
 
 Class(TSparse2, SumsBase, BaseMat, rec(
@@ -433,22 +437,39 @@ Class(DAG, TCompose, rec(
     
 ));
 
+Class(INF, Value, rec(
+	__call__ := self >> SPL(WithBases(self, rec(
+		t := TInt,
+		v := V(1),
+		operations := ValueOps,
+	))),
+	isSPL := true,
+	dims := self >> self.v,
+	eval := self >> self,
+	print := (self, i, si) >> Print(self.name),
+));
+Declare(SPLScope);
+
+
 Class(SPLScope, Buf, rec(
+
 	__call__ := (self, spl, scope) >> SPL(WithBases(self, rec(
 		spl := Checked(IsSPL(spl), spl),
 		scope := scope,
-		list := [],
-		_children := [spl, scope],
+		_children := [spl],
 	))),
 	dims := self >> Dimensions(self.spl),
-	append := (self, L) >> Union(self.list, L),
+	rChildren := self >> [self.spl, self.scope],
+	rSetChild := rSetChildFields("spl", "scope"),
+	#append := (self, L) >> Union(self.list, L),
 
-	freshScope := (self, inVar, outVar) >> SPL(WithBases(self, rec(
-			input := inVar,
-			output := outVar,
-			_children := [],
-		))),
+	#freshScope := (self, inVar, outVar) >> SPL(WithBases(self, rec(
+	#		input := inVar,
+	#		output := outVar,
+	#		_children := [],
+	#	))),
 
+	freshScope := (self) >> var.fresh_t("t", TPtr(TReal)),
 ));
 
 
@@ -482,7 +503,8 @@ Class(TSparse_Mat, TaggedNonTerminal, rec(
 Class(Trace, TaggedNonTerminal, rec(
 	abbrevs := [(n) -> [n]],
 	isReal := self >> true,
-	dims := self >> [self.params[1], self.params[1]]
+	dims := self >> self.params[1].dims()[1] * self.params[1].dims()[2],
+	print := (self, i , si) >> Print(self.name, "(", self.params[1], ")")
 ));
 
 
@@ -529,12 +551,22 @@ Class(Ttrace, BaseOperation, rec(
 ));
 
 Class(TSparse_Matrix, BaseOperation, rec(
-   __call__ := (self, element) >> WithBases(self, rec(
-        element := TArray(element, element.size()),
-        t := element.t,
-        operations := TypOps)), 
-   print := self >> Print(self.name, "(", self.element, ")"),
-   dims := self >> [self.element.size, self.element.size],
+   #__call__ := arg >> let( 
+	#    size := arg[2],
+   #     element := TArray(arg[1], arg[2]),
+   #     t := arg[1].t,
+	#	prop := Cond(IsList(arg[3]), arg[3], [arg[3]]),
+   #     operations := TypOps,WithBases(self, rec()), 
+	
+	__call__ := arg >> let(
+       self := arg[1],
+       size := arg[3],
+	   element := TArray(arg[2], arg[3]),
+       prop := Cond(IsList(arg[4]), arg[4], [arg[4]]),
+	   WithBases(self, rec(size := size, element := element, prop := prop, operations := PrintOps))),
+	
+   print := self >> Print(self.name, "(", self.element, ", ", self.prop, ")"),
+   dims := self >> [self.size, self.element.size],
 ));
 
 IsSparseT := x -> IsType(x) and IsBound(x.isSparseT) and x.isSparseT;
@@ -573,6 +605,46 @@ Class(TSparse, TArrayBase, rec(
 		if1(neq(struct_nth(x,"value", itr), V(0)), chain(
 			assign(result, add(result, V(1)))))))))),
 ));
+
+
+Class(RulesSPLScope, RuleSet);
+Class(RulesINF, RuleSet);
+Class(RulesSymbol, RuleSet);
+
+#RewriteRules(RulesSymbol, rec(
+#	addsymbol := Cond(IsBound(opts.symbol), SubstTopDown(Copy(cs), [@(1,nth), ..., @(2,var, e-> e=X), ...], 
+#    e -> nth(opts.symbol[1], e.idx)), cs);
+#));
+
+RewriteRules(RulesSPLScope, rec(
+	move_inside_gath := ARule(Compose, [@(1, SPLScope, e-> 
+		let(check := Collect(e.spl, @@(1, var, (s, cx) -> s = e.scope and cx.FDataOfs[1].var <> s)), Length(check) = 0)), 
+		[@(2,Gath, e-> Length(e.func._children) = 2 and e.func._children[1].domain() = e.func._children[2].domain()), @(3, fStack)]], 
+			e -> [let(scat := e._children[1], 
+					s := e._children[2], 
+					g := e._children[3].func, 
+					fdataofs := FDataOfs(s.spl.element.var, s.spl.element.len/2, V(0)),
+					newspl := RowVec(fCompose(fdataofs, g._children[2])),
+					#newspl2 := SubstTopDown(Copy(newspl), @(1, var, p -> p = s.scope), e -> X),
+					newscope := SPLScope(newspl * Gath(g._children[1]), s.scope),
+					newscope)]),	
+
+	move_inside_scat := ARule(Compose, [@(1, Scat), @(2, SPLScope)], e-> [SPLScope(@(1).val * @(2).val.spl, @(2).val.scope)]),
+	
+	#rowvec_gath := ARule(Compose, [@(1, RowVec), @(2, Gath)],e -> [let(i := Ind(@(1).val.element._children[1].len), ISum(i, e._children[2].element._children[1].len, diagMul(e._children[2].element,e._children[3].func)))]),
+	#[let(scat := e._children[1], s := e._children[2], g := e._children[3].func, newscope := SPLScope(RowVec(diagMul(fCompose(s.spl.element._children[1], g._children[2]))), s.scope), newscope * Gath(g._children[1]))]),
+));
+
+RewriteRules(RulesStrengthReduce, rec(
+	add := ARule(add, [@1, INF()], e -> INF),
+	fTen := ARule(fTensor, [@(1, Ind(INF()))], e -> V(1)),
+	fBas := ARule(fBase, [@(1, Ind(INF()))], e -> V(1)),
+	fI := ARule(fId, [@(1, Ind(INF()))], e -> V(1)),
+	fSta := ARule(fStack, [@(1, Ind(INF()))], e -> V(1)),
+	#Ind := ARule(Ind, [@(1, INF)], e -> V(1)),
+	#fdo := ARule(FDataofs, [@(1, INF)], e -> V(1))
+));
+
 
 Class(T_Sparse, T_Type, rec(
        t := TInt,
@@ -644,13 +716,22 @@ DefaultSumsGen.TSparse := (self, o, opts) >> o;
 
 DefaultSumsGen.sparse_nth2 := (self, o, opts) >> o;
 
+#DefaultSumsGen.RowVec := (self, o, opts) >> let(n := Ind(o.element._children[1].len), Error(), ISumAcc(n, o.element._children[1].len, ScatAcc(o.element)));
+DefaultSumsGen.RowVec := (self, o, opts) >> let(i := Ind(o.element._children[1].len), ISumAcc(i, o.element._children[1].len, Blk([o.element._children[1].lambda()])));
+
 DefaultSumsGen.RowVec2 := (self, o, opts) >> o;
 
 DefaultSumsGen.Ttrace := (self, o, opts) >> o;
 
 DefaultSumsGen.TSpars_Matrix := (self, o, opts) >> o;
 
-#DefaultSumsGen.SPLScope := (self, o, opts) >> SPLScope(self(o.child(1), opts));
+DefaultSumsGen.SPLScope := (self, o, opts) >> SPLScope(self(o.child(1), opts), o.scope);
+
+DefaultCodegen.SPLScope := (self, o, y, x, opts) >> 
+	decl([o.scope], chain(assign(o.scope, x), self(o.child(1), y, x, opts)));
+	
+	#decl([o.scope], chain(assign(o.scope, x), self(o.child(1), o.scope, x, opts))); #return decl([o.scope], self(o.child(1)._children[1], o.scope.output, x, opts))); #(self(o.child(1), y, x, opts));
+	#return decl([o.scope], chain(self(o.child(1)._children[2], o.scope, x, opts), self(o.child(1)._children[1], y, o.scope, opts))); #(self(o.child(1), y, x, opts));
 
 #Overridden Codegen from SpiralDefaults
 DefaultCodegen.ISumAcc := (self, o, y, x, opts) >> let(ii := Ind(), chain(loop(ii, Rows(o), assign(nth(y, ii), V(0))), loopf(o.var, V(0), o.domain, self._acc(self(o.child(1), y, x, opts), y))));
@@ -686,9 +767,6 @@ DefaultCodegen.TSparse_Matrix := meth(self, o, y, x, opts)
     ));
     end;
 
-DefaultCodegen.SPLScope := meth(self, o, y, x, opts) 
-	return decl([o.scope.output], chain(self(o.child(1)._children[2], o.scope.output, x, opts), self(o.child(1)._children[1], y, o.scope.input, opts))); #(self(o.child(1), y, x, opts));
-	end;
 
 DefaultCodegen.Ttrace := meth(self, o, y, x, opts)
 	local i, j, n;
