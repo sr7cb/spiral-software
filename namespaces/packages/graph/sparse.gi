@@ -717,7 +717,7 @@ DefaultSumsGen.TSparse := (self, o, opts) >> o;
 DefaultSumsGen.sparse_nth2 := (self, o, opts) >> o;
 
 #DefaultSumsGen.RowVec := (self, o, opts) >> let(n := Ind(o.element._children[1].len), Error(), ISumAcc(n, o.element._children[1].len, ScatAcc(o.element)));
-DefaultSumsGen.RowVec := (self, o, opts) >> let(i := Ind(o.element._children[1].len), ISumAcc(i, o.element._children[1].len, Blk([o.element._children[1].lambda()])));
+DefaultSumsGen.RowVec := (self, o, opts) >> let(i := Ind(o.element._children[1].len), ISumAcc(i, o.element._children[1].len, ScatAcc(fId(1)) * Blk1(o.element.at(i))) * Gath(fBase(i)));
 
 DefaultSumsGen.RowVec2 := (self, o, opts) >> o;
 
