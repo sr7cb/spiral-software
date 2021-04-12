@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018-2020, Carnegie Mellon University
+ *  Copyright (c) 2018-2021, Carnegie Mellon University
  *  See LICENSE for details
  */
 /***************************************************************************
@@ -27,9 +27,6 @@
 #ifndef COLUMNS
 #error COLUMNS must be defined
 #endif
-
-extern void INITFUNC(void);
-extern void FUNC(void *Y, void *X);
 
 vector_t * Input;
 vector_t * Output;

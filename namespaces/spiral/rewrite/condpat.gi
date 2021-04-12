@@ -1,5 +1,5 @@
 
-# Copyright (c) 2018-2020, Carnegie Mellon University
+# Copyright (c) 2018-2021, Carnegie Mellon University
 # See LICENSE for details
 
 
@@ -20,19 +20,28 @@
 #F
 #F will only execute Print("yes") -- as expected.
 #F
+
 CondPat := UnevalArgs(function(arg)
     local usage, i, pat, obj;
-    usage := "CondPat(<obj>, <pat1>, <result1>, ..., <patN>, <resultN>, <resultElse>)";
-    if Length(arg) < 3 then Error(usage); fi;
+    
+	usage := "CondPat(<obj>, <pat1>, <result1>, ..., <patN>, <resultN>, <resultElse>)";
+    
+	if Length(arg) < 3 then 
+		Error(usage); 
+	fi;
 
     obj := Eval(arg[1]);
     i := 2;
     while i <= Length(arg)-1 do
         pat := Eval(arg[i]);
-	if PatternMatch(obj, pat, empty_cx()) then return Eval(arg[i+1]); fi;
-	i := i+2;
+		if PatternMatch(obj, pat, empty_cx()) then 
+			return Eval(arg[i+1]); 
+		fi;
+		i := i+2;
     od;
-    if i=Length(arg) then return Eval(Last(arg));
-    else Error("CondPat: No 'else' result, and no patterns match");
+    if i=Length(arg) then
+		return Eval(Last(arg));
+    else 
+		Error("CondPat: No 'else' result, and no patterns match");
     fi;
 end);

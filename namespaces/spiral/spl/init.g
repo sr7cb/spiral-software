@@ -1,5 +1,5 @@
 
-# Copyright (c) 2018-2020, Carnegie Mellon University
+# Copyright (c) 2018-2021, Carnegie Mellon University
 # See LICENSE for details
 
 Import(rewrite, code, approx);
@@ -86,7 +86,6 @@ Include(tags);
 ## hashing
 Include(hashspl);
 Include(vwrap);
-#Include(objhash_init); # global hash for objects
 # extensions
 Include(ext_bitperms);
 

@@ -1,19 +1,70 @@
-# General
-.gap_history
+# Build directories
+build*/
+
+# Profiler directoris
 profiler/tempdirs
+profiler/targets/remote/
+
+# Packages
+namespaces/packages/*/
+
+# Generated/Copied files
 gap/src/machine_endian.h
-/build*
+gap/bin/catfiles.py
+gap/bin/exectest.py
+/*.bat
+/*.g
 
-# Linux
+
+# Prerequisites
+*.d
+
+# Object files
 *.o
+*.ko
+*.obj
+*.elf
+
+# Linker output
+*.ilk
+*.map
+*.exp
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
 *.a
-/gap/bin/gap
-/gap/bin/gapd
+*.la
+*.lo
 
-# Windows
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
 *.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
 
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
 
-
-
-
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf

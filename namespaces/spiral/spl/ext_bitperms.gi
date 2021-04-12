@@ -1,12 +1,7 @@
 
-# Copyright (c) 2018-2020, Carnegie Mellon University
+# Copyright (c) 2018-2021, Carnegie Mellon University
 # See LICENSE for details
 
-
-#
-# NB: Contents of this file should be moved to a directory local to the 
-#     particular Spiral Extension
-#
 
 _ToDec := v -> let(d:=Length(v), Sum(List([1..d], e -> v[e]*2^(d-e))));
 _ToBin := (i,d) -> List([1..d], e -> BinAnd(QuoInt(i, 2^(d-e)), 1));

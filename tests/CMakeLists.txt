@@ -1,7 +1,7 @@
 ##
 ## SPIRAL License
 ##
-## Copyright (c) 2018, Carnegie Mellon University
+## Copyright (c) 2018-2021, Carnegie Mellon University
 ## All rights reserved.
 ## 
 ## See LICENSE file for full information
@@ -67,9 +67,10 @@ find_package (OpenMP)
 if (${OpenMP_FOUND})
     message (STATUS "OpenMP found, flag = ${OpenMP_FOUND}")
     ##  OpenMP support found
-    string (COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "armv7l" ARM_LINUX)
-    if (NOT ${ARM_LINUX})
-	##  Don't generate for ARM, no SIMD support
+##    string (COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "armv7l" ARM_LINUX)
+##    if (NOT ${ARM_LINUX})
+    if (${INTEL_WIN} OR ${INTEL_LINUX})
+	##  Only run OpenMP when on Intel (getOpts limitations)
 	string (COMPARE NOTEQUAL "${TESTS_RUN_OPENMP}" "OFF" PERFORM_TESTS)
 	if (${PERFORM_TESTS} AND ${_p3_good})
 	    add_subdirectory (OpenMP)

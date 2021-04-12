@@ -1,5 +1,5 @@
 
-# Copyright (c) 2018-2020, Carnegie Mellon University
+# Copyright (c) 2018-2021, Carnegie Mellon University
 # See LICENSE for details
 
 
@@ -200,11 +200,39 @@ Class(VisualC_12, VisualC, rec(
     ))
 ));
 
+
+Class(NvidiaCuda, IntelC, rec(
+    compiler := "NVIDIA Cuda compiler",
+	
+	SIMD := self >> CopyFields(platforms.SIMDArchitectures, rec(
+        hasMMX    := True,
+		hasSSE    := True,
+		hasSSE2   := True,
+		hasSSE3   := True,
+        hasSSSE3  := True,
+		hasSSE4_1 := True,
+		hasSSE4_2 := True)),
+		
+	alignmentSpecifier := meth(arg)
+		local bytes;
+		
+		if Length(arg) > 1 then
+			bytes := arg[2];
+		else
+			bytes := 16;
+		fi;
+	
+		return "__attribute__((aligned("::String(bytes)::")))";
+	end,
+));
+
+
 SupportedCompilers := rec(
     IntelC := IntelC,
     VisualC := VisualC,
     VisualC_12 := VisualC_12,
     GnuC := GnuC,
     GnuC_ARM := GnuC_ARM,
-    Llvm_Clang := Llvm_Clang
+    Llvm_Clang := Llvm_Clang,
+    NvidiaCuda := NvidiaCuda
 );

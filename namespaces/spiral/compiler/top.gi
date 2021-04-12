@@ -1,5 +1,5 @@
 
-# Copyright (c) 2018-2020, Carnegie Mellon University
+# Copyright (c) 2018-2021, Carnegie Mellon University
 # See LICENSE for details
 
 
@@ -45,7 +45,7 @@ CodeSums := function(sums, opts)
         fi;
     
         code := opts.codegen(Formula(sums), Y, X, opts);
-        code.ruletree := sums.ruletree;
+        code.ruletree := Cond(IsBound(sums.ruletree), sums.ruletree, rec());
         return code;
 end;
 

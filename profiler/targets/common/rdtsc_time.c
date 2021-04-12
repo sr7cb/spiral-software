@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018-2020, Carnegie Mellon University
+ *  Copyright (c) 2018-2021, Carnegie Mellon University
  *  See LICENSE for details
  */
 
@@ -12,13 +12,9 @@
 #include "errcodes.h"
 #include "opt_macros.h"
 
-extern void INITFUNC(void);
-
 #if (ALLOCATE_MEMORY)
-extern void FUNC(double *Y, double *X);
 #define RUN_FUNC FUNC(out, in)
 #else
-extern void FUNC(void);
 #define RUN_FUNC FUNC()
 #endif
 

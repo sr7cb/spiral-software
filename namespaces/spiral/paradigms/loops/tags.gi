@@ -1,9 +1,9 @@
 
-# Copyright (c) 2018-2020, Carnegie Mellon University
+# Copyright (c) 2018-2021, Carnegie Mellon University
 # See LICENSE for details
 
-#DClass(ABuf, ATag, rec(
-Class(ABuf, rec(
+
+Class(ABuf, AGenericTag, rec(
     __call__ := (self, bs) >> WithBases(self, rec(bs:=bs)),
     print := (self) >> When(IsBound(self.bs), Print(self.name, "(", self.bs, ")"), Print(self.name)),
 #D    isBuffer := true,

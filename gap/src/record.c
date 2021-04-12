@@ -3,11 +3,11 @@
 *A  record.c                    GAP source                   Martin Schoenert
 **
 **
-*Y  Copyright (C) 2018-2020, Carnegie Mellon University
+*Y  Copyright (C) 2018-2021, Carnegie Mellon University
 *Y  All rights reserved.  See LICENSE for details.
 *Y  
 *Y  This work is based on GAP version 3, with some files from version 4.  GAP is
-*Y  Copyright (C) (1987--2020) by the GAP Group (www.gap-system.org).
+*Y  Copyright (C) (1987--2021) by the GAP Group (www.gap-system.org).
 **
 **  This file contains the functions for computing with records.
 **
@@ -441,12 +441,10 @@ Obj  MakeTab ( Obj hdLiteral ) {
         if ( hdVal == HdVoid )
             Error("Table: function must return a value",0,0);
 
-        // name = strdup(RECNAM_NAME(hdNam));
-		name = RECNAM_NAME(hdNam);		/* don't copy, just use the string */
+		name = RECNAM_NAME(hdNam);
         pos = TableLookup(hdTab, name, OFS_IDENT);
         hd = MakeIdent(name);
         SET_VAR_VALUE(hd, hdVal);
-        // free(name);
         TableAdd(hdTab, pos, hd);
     }
 
@@ -1174,13 +1172,8 @@ Bag      FunRecName (Bag hdCall)
         return Error("RecName: <%g> must be a string",
                      (Int)hdObjUneval, 0);
     else {
-        /* the only safe way of doing indirect FindRecname with current garbage
-           collector */
-		/* why?? -- makes no sense --  */
-        // char * st = strdup((char*)PTR_BAG(hdObj));
 		char * st = (char*)PTR_BAG(hdObj);
         Bag hd = FindRecname(st);
-        // free(st);
         return hd;
     }
 }

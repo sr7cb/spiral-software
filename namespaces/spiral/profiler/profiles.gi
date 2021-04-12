@@ -1,5 +1,5 @@
 
-# Copyright (c) 2018-2020, Carnegie Mellon University
+# Copyright (c) 2018-2021, Carnegie Mellon University
 # See LICENSE for details
 
 
@@ -143,6 +143,17 @@ default_profiles := rec(
         makeopts := rec(
             CC := "gcc",
             CFLAGS := "-O2 -Wall -fomit-frame-pointer -march=native -std=c99",
+        ),
+        outdir := "/tmp/spiral",
+        meas := (a,b) -> _StandardMeasureVerify(a,b, ""),
+        verify := (a,b) -> _StandardMeasureVerify(a,b, "verify")
+    ),
+
+    linux_x86_cuda := rec(
+        name := "linux-cuda",
+        makeopts := rec(
+            CC := "nvcc",
+            CFLAGS := "-O2 ",
         ),
         outdir := "/tmp/spiral",
         meas := (a,b) -> _StandardMeasureVerify(a,b, ""),
@@ -424,6 +435,18 @@ default_profiles := rec(
         meas := (a,b) -> _StandardMeasureVerify(a,b, ""),
         verify := (a,b) -> _StandardMeasureVerify(a,b, "verify")
   ),
+
+    win_x64_cuda := rec (
+	name := "win-x64-cuda",
+	target := rec(name := "win-x64-cuda"),
+	makeopts := rec (
+	    CC := "nvcc",
+	    CFLAGS := "",
+	),
+        outdir := "/temp",
+        meas := (a,b) -> _StandardMeasureVerify(a,b, ""),
+        verify := (a,b) -> _StandardMeasureVerify(a,b, "verify")
+    ),
 
     # altivec profiles
     # ------------------------------------------------------------------------------
