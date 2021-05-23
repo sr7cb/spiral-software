@@ -3,7 +3,6 @@ Import(graph);
 opts := SpiralDefaults;
 opts.useDeref := false;
 opts.globalUnrolling := 0;
-t := var.fresh_t("t", TPtr(TReal));
 i := Ind(3);
 j := Ind(3);
 scat := Scat(fTensor(fBase(i), fBase(j))); 
@@ -18,6 +17,8 @@ cs := CodeSums(srt, opts);
 PrintCode("mxm", cs, opts);
 
 
+
+#t := var.fresh_t("t", TPtr(TReal));
 #trace := ISumAcc(i, 3, Gath(fTensor(fBase(i), fBase(i)))); #RowVec(FConst(1s)) * Gath(from over there)
 #mpt := trace * mxm;
 

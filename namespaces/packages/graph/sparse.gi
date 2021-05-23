@@ -607,15 +607,103 @@ Class(TSparse, TArrayBase, rec(
 ));
 
 
+Class(fitrStack, FuncClassOper, rec(
+	__call__ := meth(arg)
+	 local self, children, lkup, res, h;
+        self := arg[1];
+        children := Flat(Drop(arg, 1));
+        if self.skipOneChild and Length(children)=1 then return children[1]; fi;
+
+        h := self.hash;
+        if h<>false then
+            lkup := h.objLookup(self, children);
+            if lkup[1]<>false then return lkup[1]; fi;
+        fi;
+        res := WithBases(self, rec(operations := RewritableObjectOps, _children := children));
+        if h<>false then return h.objAdd(res, lkup[2]);
+        else return res;
+        fi;
+    end,
+
+	domain := self >> self._children[2].domain() * self._children[1].range,
+    range := self >> self._children[2].range(),  
+    subdomainsDivisibleBy := (self, n) >> ForAll(self._children, x -> x.domain() mod n = 0),
+
+    #lambda := meth(self)
+    #    #local vals;
+    #    #vals := [];
+	#	for i in [1..self.domain()] do 
+	#	Add(vals, self.child(2).lambda().at(add(idiv(sub(i,V(1)), add(self.range(),V(1))), mul(self.range(), imod(sub(i,V(1)), add(self.range(), V(1)))))));
+	#	od;
+	#	return Lambda(self._children[1], vals);
+    #end
+
+	lambda := meth(self)
+		local v, j;
+		v := Ind(self.range());
+		#return Lambda(v, self.child(2).lambda().at(add(idiv(v, idiv(self.range(), self.domain())), mul(self.range(), imod(v, idiv(self.range(), self.domain()))))));
+		return let(l := Lambda(v, self.child(2).lambda().at(imod(v, self._children[2].domain()))), 
+					#c := Collect(l, @(1,var, e -> e.range = self._children[2].domain())),
+					#c := Collect(l, @(1, add, e -> Error())),
+					s := SubstVars(Copy(l), rec((self.child(1).id) := idiv(v, self.child(2).domain()))),
+					s);
+	end
+));
+
 Class(RulesSPLScope, RuleSet);
 Class(RulesINF, RuleSet);
 Class(RulesSymbol, RuleSet);
+Class(RulesTrace, RuleSet);
+Class(RulesMG, RuleSet);
+Class(RulesMR, RuleSet);
 
-#RewriteRules(RulesSymbol, rec(
-#	addsymbol := Cond(IsBound(opts.symbol), SubstTopDown(Copy(cs), [@(1,nth), ..., @(2,var, e-> e=X), ...], 
-#    e -> nth(opts.symbol[1], e.idx)), cs);
-#));
+#comments for rulesmxmtrace
+#cis := Rule([ISum, [ISum, @(1)]], e -> [let(rec(result := ISumAcc(e.var, e.domain, @(1).val)), result)]),
+#remove_trace := ARule(Compose, [@(1, RowVec), @(2, Gath), @(3,ISum)], e->[@(3).val]),
+#change_isum_isumacc := ARule(ISum, [@(1, SPLScope)], e -> [let(updom := e.var, inputs := e._children[1], isa := ISumAcc(updom, updom.range, inputs), isa)]),
+#change_move_scat := ARule(ISum, [@(1, SPLScope)], e -> [Error()]),
+#remove_trace := ARule(Compose, [@(1, RowVec), @(2, Gath), @(3,ISum)], e->[@(3).val]),
+#remove_trace := ARule(Compose, [@(1, Gath), [@(2, ISum), @(3, ISum, e -> let(s := Collect(Copy(e._children[1]._children), Scat), s[1].func.__name__ = "fTensor"
+	#																			and Length(s[1].func._children) = 2 and s[1].func._children[1].__name__ = "fBase" 
+	#																			and s[1].func._children[2].__name__ = "fBase"))]], 
+	#																			e->[let(v1 := @(2).val.var, v2 := @(3).val.var, f := fBase(@(2).val.var), c := @(3).val._children[1], two := @(3).val._children[1]._children[2] * @(3).val._children[1]._children[3], 
+	#																			ISum(v1, v1.range, ISum(v2, v2.range, COND(fBase(v1), Scat(fBase(v1)) * two, O(c.dims()[1],1)))))]),
+RewriteRules(RulesMG, rec(
+	move_gath := ARule(Compose, [@(1, Gath), [@(2, ISum), @(3, ISum, e -> let(s := Collect(Copy(e._children[1]._children), Scat), Length(s) = 1))]], 
+																							e -> [let(exp := @(1).val * @(3).val._children[1], 
+																									ISum(@(2).val.var, @(2).val.var.range, 
+																									ISum(@(3).val.var, @(3).val.var.range,
+																								  	exp)))]),
 
+	gath_scat_cond := ARule(Compose, [@(1, Gath), @(2, Scat)], e->[let(v1 := @(2).val.func._children[1].params[2], v2 := @(2).val.func._children[2].params[2], 
+																		COND(eq(v1, v2), 
+																			Scat(@(2).val.func._children[1]), 
+																			O(@(2).val.func._children[1].params[1], 1)))]),	
+));
+
+
+RewriteRules(RulesMR, rec(
+	collapse_loop_cond := Rule([@(1,ISum), [@(2,ISum), [@(3, Compose), @(4,COND),...]]], e->[let(v1 := @(1).val.var, v2 := @(2).val.var, r := @(3).val._children[2], s := @(3).val._children[3],
+																								s2 :=  SubstVars(Copy(s), rec((v2.id) := v1.id)),
+																								Error(),
+																								r2 :=  @(4).val._children[1] * r * s2,
+																								ISum(v1, v1.range, r2))]),
+));
+
+#comments for rulestrace	
+#change_fbase := ARule(fCompose, [@(1,itrfStack, e -> let(one := e._children[2]._children[1].domain(), two := e._children[2]._children[2].domain(), one = two)), @(2, fBase)], e -> [let(c := Collect(e, var), v2 := c[1], SubstTopDown(e, @(1,var, e-> var.range <> v2.range), e->v2))]),#[fCompose(@(1).val, @(1).val._children[2]._children[1])]),
+RewriteRules(RulesTrace, rec(
+	change_fbase := ARule(Gath, [@(1, fCompose, e -> let(length := Length(e._children), length = 2))],
+									 e -> [let(c := Collect(e, var), 
+												v2 := c[Length(c)],
+												result := SubstTopDown(Copy(e), @(1, var, e-> var.range <> v2), e -> v2),
+												Error())]),
+));
+
+#comments for RulesScope
+#newspl2 := SubstTopDown(Copy(newspl), @(1, var, p -> p = s.scope), e -> X),
+#rowvec_gath := ARule(Compose, [@(1, RowVec), @(2, Gath)],e -> [let(i := Ind(@(1).val.element._children[1].len), ISum(i, e._children[2].element._children[1].len, diagMul(e._children[2].element,e._children[3].func)))]),
+#[let(scat := e._children[1], s := e._children[2], g := e._children[3].func, newscope := SPLScope(RowVec(diagMul(fCompose(s.spl.element._children[1], g._children[2]))), s.scope), newscope * Gath(g._children[1]))]),
 RewriteRules(RulesSPLScope, rec(
 	move_inside_gath := ARule(Compose, [@(1, SPLScope, e-> 
 		let(check := Collect(e.spl, @@(1, var, (s, cx) -> s = e.scope and cx.FDataOfs[1].var <> s)), Length(check) = 0)), 
@@ -625,14 +713,10 @@ RewriteRules(RulesSPLScope, rec(
 					g := e._children[3].func, 
 					fdataofs := FDataOfs(s.spl.element.var, s.spl.element.len/2, V(0)),
 					newspl := RowVec(fCompose(fdataofs, g._children[2])),
-					#newspl2 := SubstTopDown(Copy(newspl), @(1, var, p -> p = s.scope), e -> X),
 					newscope := SPLScope(newspl * Gath(g._children[1]), s.scope),
 					newscope)]),	
 
 	move_inside_scat := ARule(Compose, [@(1, Scat), @(2, SPLScope)], e-> [SPLScope(@(1).val * @(2).val.spl, @(2).val.scope)]),
-	
-	#rowvec_gath := ARule(Compose, [@(1, RowVec), @(2, Gath)],e -> [let(i := Ind(@(1).val.element._children[1].len), ISum(i, e._children[2].element._children[1].len, diagMul(e._children[2].element,e._children[3].func)))]),
-	#[let(scat := e._children[1], s := e._children[2], g := e._children[3].func, newscope := SPLScope(RowVec(diagMul(fCompose(s.spl.element._children[1], g._children[2]))), s.scope), newscope * Gath(g._children[1]))]),
 ));
 
 RewriteRules(RulesStrengthReduce, rec(
@@ -644,6 +728,11 @@ RewriteRules(RulesStrengthReduce, rec(
 	#Ind := ARule(Ind, [@(1, INF)], e -> V(1)),
 	#fdo := ARule(FDataofs, [@(1, INF)], e -> V(1))
 ));
+
+#RewriteRules(RulesSymbol, rec(
+#	addsymbol := Cond(IsBound(opts.symbol), SubstTopDown(Copy(cs), [@(1,nth), ..., @(2,var, e-> e=X), ...], 
+#    e -> nth(opts.symbol[1], e.idx)), cs);
+#));
 
 
 Class(T_Sparse, T_Type, rec(
@@ -717,7 +806,7 @@ DefaultSumsGen.TSparse := (self, o, opts) >> o;
 DefaultSumsGen.sparse_nth2 := (self, o, opts) >> o;
 
 #DefaultSumsGen.RowVec := (self, o, opts) >> let(n := Ind(o.element._children[1].len), Error(), ISumAcc(n, o.element._children[1].len, ScatAcc(o.element)));
-DefaultSumsGen.RowVec := (self, o, opts) >> let(i := Ind(o.element._children[1].len), ISumAcc(i, o.element._children[1].len, ScatAcc(fId(1)) * Blk1(o.element.at(i))) * Gath(fBase(i)));
+DefaultSumsGen.RowVec := (self, o, opts) >> let(i := Ind(o.element.domain()), ISumAcc(i, o.element.domain(), Scat(fId(1)) * Blk1(o.element.at(i))) * Gath(fBase(i)));
 
 DefaultSumsGen.RowVec2 := (self, o, opts) >> o;
 

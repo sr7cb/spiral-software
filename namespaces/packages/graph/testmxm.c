@@ -85,7 +85,7 @@
 }
 */
 
-void mxm(double  *Y, double  *X) {
+/*void mxm(double  *Y, double  *X) {
     for(int i5 = 0; i5 <= 2; i5++) {
         for(int i6 = 0; i6 <= 2; i6++) {
             static double T1[1];
@@ -101,11 +101,63 @@ void mxm(double  *Y, double  *X) {
             Y[((3*i5) + i6)] = T1[0];
         }
     }
+}*/
+
+void mxm(double  *Y, double  *X) {
+    for(int i5 = 0; i5 <= 2; i5++) {
+        for(int i6 = 0; i6 <= 2; i6++) {
+            double  *t2;
+            t2 = X;
+            static double T1[1];
+            T1[0] = 0;
+            for (int i7 = 0; i7 < 3; i7++) {
+                double T2[1] = {0};
+                T2[0] = (T2[0] + X[((3*i5) + i7)]);
+                printf("values before: %f, %f\t",t2[(3*i7) + i6], T2[0]);
+                T1[0] = (T1[0] + (t2[((3*i7) + i6)]*T2[0]));
+                printf("\n");
+            }
+            Y[((3*i5) + i6)] = T1[0];
+        }
+    }
+}
+
+void mxm2(double  *Y, double  *X, double  *B1) {
+    for(int i5 = 0; i5 <= 2; i5++) {
+        for(int i6 = 0; i6 <= 2; i6++) {
+            double  *t2;
+            t2 = X;
+            static double T1[1];
+            T1[0] = 0;
+            for (int i7 = 0; i7 < 3; i7++) {
+                double T2[1] = {0};
+                T2[0] = (T2[0] + B1[((3*i5) + i7)]);
+                 printf("values before: %f, %f\t",t2[(3*i7) + i6], T2[0]);
+                T1[0] = (T1[0] + (t2[((3*i7) + i6)]*T2[0]));
+                 printf("\n");
+            }
+            Y[((3*i5) + i6)] = T1[0];
+        }
+    }
+}
+
+void mxmmergedtrace(double  *Y, double  *X) {
+    Y[0] = 0;
+    for(int i5 = 0; i5 <= 2; i5++) {
+        double  *t1;
+        t1 = X;
+        for (int i7 = 0; i7 < 3; i7++) {
+            double T1[1] = {0};
+            T1[0] = (T1[0] + X[((3*i5) + i7)]);
+            Y[0] = (Y[0] + (t1[((3*i7) + i5)]*T1[0]));
+        }
+    }
 }
 
 int main() {
     double * output = malloc(9 * sizeof(double));
-    double * input = malloc(9 * sizeof(double)); 
+    double * input = malloc(9 * sizeof(double));
+    double * input2 = malloc(9 * sizeof(double));  
     /* 6    2   2
        7    5   4  
        1    9   3
@@ -120,11 +172,22 @@ int main() {
     input[7] = 9;
     input[8] = 3;
 
+    input2[0] = 1;
+    input2[1] = 1;
+    input2[2] = 1;
+    input2[3] = 1;
+    input2[4] = 1;
+    input2[5] = 1;
+    input2[6] = 1;
+    input2[7] = 1;
+    input2[8] = 1;
+
     for(int i = 0; i < 9; i++){
         output[i] = 0;
     }
 
-    mxm(output, input);
+    //mxm2(output, input, input2);
+    mxmmergedtrace(output, input);
 
     for(int i = 0; i < 3; i++) {
         for(int j = 0; j < 3; j++) {
