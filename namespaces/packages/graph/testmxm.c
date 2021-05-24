@@ -141,6 +141,7 @@ void mxm2(double  *Y, double  *X, double  *B1) {
     }
 }
 
+/*
 void mxmmergedtrace(double  *Y, double  *X) {
     Y[0] = 0;
     for(int i5 = 0; i5 <= 2; i5++) {
@@ -150,6 +151,25 @@ void mxmmergedtrace(double  *Y, double  *X) {
             double T1[1] = {0};
             T1[0] = (T1[0] + X[((3*i5) + i7)]);
             Y[0] = (Y[0] + (t1[((3*i7) + i5)]*T1[0]));
+        }
+    }
+}*/
+
+void mxmmergedtrace(double  *Y, double  *X) {
+    Y[0] = 0;
+    for (int i5 = 0; i5 < 3; i5++) {
+        double T1[1] = {0};
+        double  *t2;
+        t2 = X;
+        T1[0] = T1[0];
+        for (int i11 = 0; i11 < 3; i11++) {
+            double T2[1] = {0};
+            T2[0] = (T2[0] + X[((3*i5) + i11)]);
+            T1[0] = (T1[0] + (t2[((3*i11) + i5)]*T2[0]));
+        }
+        Y[0] = Y[0];
+        for (int i8 = 0; i8 < 1; i8++) {
+            Y[0] = (Y[0] + T1[0]);
         }
     }
 }

@@ -1,12 +1,13 @@
 # Build directories
 build*/
 
+
 # Profiler directoris
 profiler/tempdirs
 profiler/targets/remote/
 
 # Packages
-namespaces/packages/*/
+#namespaces/packages/*/
 
 # Generated/Copied files
 gap/src/machine_endian.h
@@ -68,3 +69,7 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+#Spiral
+spiral
+spirald

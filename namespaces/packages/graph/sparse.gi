@@ -690,9 +690,9 @@ RewriteRules(RulesMR, rec(
 ));
 
 RewriteRules(RulesMR2, rec(
-	move_rowvec := Rule([@(1,Compose), @(2, RowVec), [@(3,ISum), [@(4,Compose), @(5,Scat), ...]]], e-> let(v1 := @(3).val.var, s := @(4).val._children[2], f := @(4).val._children[3],
-																											rv := RowVec(fCompose(@(2).val.element, @(5).val.func)),
-																											ISumAcc(v1, v1.range, rv * s * f))),
+	move_rowvec := ARule(Compose, [@(1, RowVec), [@(2, ISum), [@(3, Compose), @(4,Scat), ...]]], e -> [let(v1 := @(2).val.var, s := @(3).val._children[2], f := @(3).val._children[3],
+																											rv := RowVec(fCompose(@(1).val.element, @(4).val.func)),
+																											ISumAcc(v1, v1.range, rv * s * f))]),
 ));
 
 #comments for rulestrace	
