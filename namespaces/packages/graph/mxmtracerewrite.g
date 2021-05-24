@@ -16,6 +16,7 @@ trace := RowVec(fConst(TInt,3,1)) * Gath(fitrStack(k,fTensor(fBase(k), fBase(k))
 mpt := trace * mxm;
 mpt2 := Rewrite(mpt, RulesMG, opts);
 mpt3 := Rewrite(mpt2, RulesMR, opts);
+mpt4 := Rewrite(mpt3, RulesMR2, opts);
 rt := RandomRuleTree(last, opts);
 srt := SumsRuleTree(rt, opts);
 srt2 := Rewrite(srt, RulesMTSigma, opts);

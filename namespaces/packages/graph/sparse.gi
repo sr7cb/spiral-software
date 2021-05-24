@@ -656,7 +656,7 @@ Class(RulesSymbol, RuleSet);
 Class(RulesTrace, RuleSet);
 Class(RulesMG, RuleSet);
 Class(RulesMR, RuleSet);
-
+Class(RulesMR2, RuleSet);
 #comments for rulesmxmtrace
 #cis := Rule([ISum, [ISum, @(1)]], e -> [let(rec(result := ISumAcc(e.var, e.domain, @(1).val)), result)]),
 #remove_trace := ARule(Compose, [@(1, RowVec), @(2, Gath), @(3,ISum)], e->[@(3).val]),
@@ -683,11 +683,16 @@ RewriteRules(RulesMG, rec(
 
 
 RewriteRules(RulesMR, rec(
-	collapse_loop_cond := Rule([@(1,ISum), [@(2,ISum), [@(3, Compose), @(4,COND),...]]], e->[let(v1 := @(1).val.var, v2 := @(2).val.var, r := @(3).val._children[2], s := @(3).val._children[3],
-																								s2 :=  SubstVars(Copy(s), rec((v2.id) := v1.id)),
-																								Error(),
+	collapse_loop_cond := Rule([@(1,ISum), [@(2,ISum), [@(3, Compose), @(4,COND),...]]], e->let(v1 := @(1).val.var, v2 := @(2).val.var, r := @(3).val._children[2], s := @(3).val._children[3],
+																								s2 :=  SubstVars(Copy(s), rec((v2.id) := v1)),
 																								r2 :=  @(4).val._children[1] * r * s2,
-																								ISum(v1, v1.range, r2))]),
+																								ISum(v1, v1.range, r2))),
+));
+
+RewriteRules(RulesMR2, rec(
+	move_rowvec := Rule([@(1,Compose), @(2, RowVec), [@(3,ISum), [@(4,Compose), @(5,Scat), ...]]], e-> let(v1 := @(3).val.var, s := @(4).val._children[2], f := @(4).val._children[3],
+																											rv := RowVec(fCompose(@(2).val.element, @(5).val.func)),
+																											ISumAcc(v1, v1.range, rv * s * f))),
 ));
 
 #comments for rulestrace	
