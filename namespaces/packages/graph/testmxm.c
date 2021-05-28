@@ -174,6 +174,29 @@ void mxmmergedtrace(double  *Y, double  *X) {
     }
 }
 
+void maskedmxm(double  *Y, double  *X, double  *M1) {
+    for(int i5 = 0; i5 <= 2; i5++) {
+        for(int i6 = 0; i6 <= 2; i6++) {
+            if (((M1[((3*i5) + i6)] == 1))) {
+                double  *t1;
+                t1 = X;
+                double T1[1] = {0};
+                T1[0] = 0;
+                for (int i7 = 0; i7 < 3; i7++) {
+                    double T2[1] = {0};
+                    T2[0] = (T2[0] + X[((3*i5) + i7)]);
+                    T1[0] = (T1[0] + (t1[((3*i7) + i6)]*T2[0]));
+                }
+                Y[((3*i5) + i6)] = T1[0];
+            } else {
+                double T3[1];
+                T3[0] = 0;
+                Y[((3*i5) + i6)] = T3[0];
+            }
+        }
+    }
+}
+
 int main() {
     double * output = malloc(9 * sizeof(double));
     double * input = malloc(9 * sizeof(double));
@@ -195,10 +218,10 @@ int main() {
     input2[0] = 1;
     input2[1] = 1;
     input2[2] = 1;
-    input2[3] = 1;
+    input2[3] = 0;
     input2[4] = 1;
-    input2[5] = 1;
-    input2[6] = 1;
+    input2[5] = 0;
+    input2[6] = 0;
     input2[7] = 1;
     input2[8] = 1;
 
@@ -207,7 +230,7 @@ int main() {
     }
 
     //mxm2(output, input, input2);
-    mxmmergedtrace(output, input);
+    maskedmxm(output, input, input2);
 
     for(int i = 0; i < 3; i++) {
         for(int j = 0; j < 3; j++) {

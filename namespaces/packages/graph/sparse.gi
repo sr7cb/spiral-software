@@ -238,7 +238,7 @@ Class(FDataSparseOfs, Function, rec(
 
 
 
-	range := self >> self.var.t,
+	range := self >> When(self._range=false, self.var.t, self._range),
     domain := self >> self.len,
     #range := self >> When(self._range=false, self.var.t.t, self._range),
     inline := true,
@@ -437,17 +437,34 @@ Class(DAG, TCompose, rec(
     
 ));
 
-Class(INF, Value, rec(
-	__call__ := self >> SPL(WithBases(self, rec(
-		t := TInt,
-		v := V(1),
-		operations := ValueOps,
+INF := arg -> Cond(
+   Length(arg)=0, Int(1000000),
+   Length(arg)=1, var.fresh("i", TInt, toRange(Int(1000000))),
+   Error("Usage: INF() | INF(<range>)")
+);
+
+
+#Class(INF, Value, rec(
+#	__call__ := self >> SPL(WithBases(self, rec(
+#		t := TInt,
+#		v := V(1),
+#		operations := ValueOps,
+#	))),
+#	isSPL := true,
+#	dims := self >> self.v,
+#	eval := self >> self,
+#	print := (self, i, si) >> Print(self.name),
+#));
+
+Class(Mask, Diag, rec(
+	__call__ := (self, func) >> SPL(WithBases(self, rec(
+		element := func,
+		var := func.var,
 	))),
-	isSPL := true,
-	dims := self >> self.v,
-	eval := self >> self,
-	print := (self, i, si) >> Print(self.name),
+	print := (self, i, si) >> Print(self.name, "(", self.element, ")"),
+	index := (self, i, j, dom) >> nth(self.var, add(mul(dom, i), j)),
 ));
+
 Declare(SPLScope);
 
 
@@ -457,6 +474,7 @@ Class(SPLScope, Buf, rec(
 		spl := Checked(IsSPL(spl), spl),
 		scope := scope,
 		_children := [spl],
+		dimensions := spl.dimensions,
 	))),
 	dims := self >> Dimensions(self.spl),
 	rChildren := self >> [self.spl, self.scope],
@@ -536,6 +554,7 @@ NewRulesFor(TSparse_Mat, rec(
 		apply := (nt, c, cnt) -> HStack(nt.params[1]),
 	)
 ));
+
 
 Class(Ttrace, BaseOperation, rec(
 	__call__ := (self, object) >> WithBases(self, rec(
@@ -657,6 +676,7 @@ Class(RulesTrace, RuleSet);
 Class(RulesMG, RuleSet);
 Class(RulesMR, RuleSet);
 Class(RulesMR2, RuleSet);
+Class(RulesMask, RuleSet);
 #comments for rulesmxmtrace
 #cis := Rule([ISum, [ISum, @(1)]], e -> [let(rec(result := ISumAcc(e.var, e.domain, @(1).val)), result)]),
 #remove_trace := ARule(Compose, [@(1, RowVec), @(2, Gath), @(3,ISum)], e->[@(3).val]),
@@ -683,16 +703,29 @@ RewriteRules(RulesMG, rec(
 
 
 RewriteRules(RulesMR, rec(
-	collapse_loop_cond := Rule([@(1,ISum), [@(2,ISum), [@(3, Compose), @(4,COND),...]]], e->let(v1 := @(1).val.var, v2 := @(2).val.var, r := @(3).val._children[2], s := @(3).val._children[3],
-																								s2 :=  SubstVars(Copy(s), rec((v2.id) := v1)),
-																								r2 :=  @(4).val._children[1] * r * s2,
-																								ISum(v1, v1.range, r2))),
+	collapse_loop_cond := Rule([@(1,ISum), [@(2,ISum), [@(3, Compose), @(4,COND),...]]], e->let(v1 := @(1).val.var, v2 := @(2).val.var, com := @(3).val,
+																								com2 := SubstTopDown(Copy(com), @(5, COND), g -> @(5).val._children[1]),
+																								com3 :=  SubstVars(Copy(com2), rec((v2.id) := v1)),
+																								ISum(v1, v1.range, com3))),
 ));
 
 RewriteRules(RulesMR2, rec(
 	move_rowvec := ARule(Compose, [@(1, RowVec), [@(2, ISum), [@(3, Compose), @(4,Scat), ...]]], e -> [let(v1 := @(2).val.var, s := @(3).val._children[2], f := @(3).val._children[3],
 																											rv := RowVec(fCompose(@(1).val.element, @(4).val.func)),
 																											ISumAcc(v1, v1.range, rv * s * f))]),
+));
+
+#e->[let(v1 := @(2).val.var, v2 := @(3).val.var, 
+#inside := @(3).val._children[1], dom := @(2).val.domain,
+#con := COND(eq(@(1).val.index(v1,v2,dom), 1)))]),
+RewriteRules(RulesMask, rec(
+	move_mask := ARule(Compose, [@(1,Mask), [@(2, ISum), @(3, ISum)]], e -> [let(exp := @(1).val * @(3).val._children[1],
+																			ISum(@(2).val.var, @(2).val.var.range, 
+																			ISum(@(3).val.var, @(3).val.var.range,
+																			exp)))]), 
+	replace_mask := Rule([@(1,ISum), [@(2,ISum), [@(3, Compose), @(4,Mask),...]]], e -> let(v1 := @(1).val.var, v2 := @(2).val.var, dom := @(2).val.domain,
+																	inside := @(3).val, inside2 := SubstTopDown(Copy(inside), @(5, Mask), g -> I(@(5).val.element.len)),
+																	con := COND(eq(@(4).val.index(v1,v2,dom), 1), inside2, Scat(fTensor(fBase(v1), fBase(v2))) * O(1,1)), ISum(v1, v1.range, ISum(v2, v2.range, con)))),
 ));
 
 #comments for rulestrace	
