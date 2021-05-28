@@ -1,3 +1,4 @@
+#this is a comment
 Load(graph);
 Import(graph);
 opts := SpiralDefaults;
