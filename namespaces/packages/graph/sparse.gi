@@ -35,6 +35,7 @@ Class(SparseScalarProduct, BaseOperation, rec(
 ));
 
 
+Declare(IsSparseT);
 
 Class(sparse_nth3, Loc, rec(
     __call__ := (self, list, idx) >> WithBases(self,
@@ -119,8 +120,6 @@ Class(KVPair, CompositeTyp, rec(
 		second := self >> self.second,
 	print := self >> Print(self.name,"(",self.first,", ",self.second,")"),
 ));
-
-Declare(IsSparseT);
 
 SparseMatSPL := function ( S )
   local M, t, v, i;
@@ -370,7 +369,7 @@ Class(struct_nth, nth, rec(
 		loc := loc,
 		elem := elem,
 		idx := idx,
-		t := Checked(IsType(idx.t), idx.t),
+		t := Cond(IsPtrT(loc) or IsSparseT(loc.t), loc.t.t, loc.t),
 		operations := NthOps
 	)),
 	rChildren := self >> [self.loc, self.elem, self.idx],
@@ -590,6 +589,8 @@ Class(TSparse_Matrix, BaseOperation, rec(
 
 IsSparseT := x -> IsType(x) and IsBound(x.isSparseT) and x.isSparseT;
 
+Declare(inref);
+
 Class(TSparse, TArrayBase, rec(
 	__call__ := (self, t, ring) >> 
 			WithBases(self, rec(
@@ -604,29 +605,33 @@ Class(TSparse, TArrayBase, rec(
     #dims := self >> Cond(
     #    ObjId(self.t)=TSparse, [self.size] :: self.t.dims(),
     #    [self.size]),
-	size := self >> self.t.size,
+	size := self >> self.size2,
 	dims := self >> [1, self.size2],
 	rChildren := self >> [self.t, self.ring],
 	rSetChild := rSetChildFields("t", "ring"),
 #	print := self >> Print(self.__name__, "(", self.t, ", ", self.size1, ", ", self.list1, ", ", self.size2, ", ", self.list2, ", ", self.sa, ")"),	
-
-    get_iterator := self >> let( 
-	itr := var.fresh_t("itr",TInt),itr),
+	range := self >> self.t,
 	print := self >> Print(self.__name__, "(", self.t, ", ", self.ring, ")"),
 
+    get_var := self >> let(var.fresh_t("spr_arr", TPtr(TInt))),
 	
-	num_nonzeros := (self, x) >> let( 
-		itr := var.fresh_t("itr", TInt),
-		result := var.fresh_t("result", TInt),
-		decl([itr, result], chain(
-		assign(result, V(0)),
-		loopw(neq(struct_nth(x,"value", itr), NULL(TInt)), chain(
-		if1(neq(struct_nth(x,"value", itr), V(0)), chain(
-			assign(result, add(result, V(1)))))))))),
+	length := (self, x) >> struct_nth(inref(x), "length", ""),
+
+	get_elem_index := (self, x, idx) >> struct_nth(inref(x), "index", idx),
+
+	get_elem_value := (self, x, idx) >> struct_nth(inref(x), "value", idx),
+	#num_nonzeros := (self, x) >> let( 
+	#	itr := var.fresh_t("itr", TInt),
+	#	result := var.fresh_t("result", TInt),
+	#	decl([itr, result], chain(
+	#	assign(result, V(0)),
+	#	loopw(neq(struct_nth(x,"value", itr), NULL(TInt)), chain(
+	#	if1(neq(struct_nth(x,"value", itr), V(0)), chain(
+	#		assign(result, add(result, V(1)))))))))),
 ));
 
 
-Class(fitrStack, FuncClassOper, rec(
+Class(fItrStack, FuncClassOper, rec(
 	__call__ := meth(arg)
 	 local self, children, lkup, res, h;
         self := arg[1];
@@ -786,6 +791,13 @@ __call__ := (self, t) >> WithBases(self, rec(
 	print := (self, i, si) >> Print(self.__name__)
 ));
 
+Class(inref, nth, rec(
+	__call__ := (self, loc) >> Inherited(loc, TInt.value(0)),
+    rChildren := self >> [self.loc],
+    rSetChild := rSetChildFields("loc"),
+));
+
+
 Class(if4, Command, rec(
   __call__ := (self, if_cond, if_cmd, else_cmd) >> WithBases(self, rec(
     if_cond := toExpArg(if_cond),
@@ -802,11 +814,14 @@ Class(if4, Command, rec(
   )
 ));
 
-CUnparser.TSparse := (self,o,i,is) >> Print(Blanks(i),
-	"struct sparse_array", o.name);
+CUnparser.inref := (self, o, i, is) >> Print("(*", self(o.loc, i, is), ")");
 
-CUnparser.struct_nth := (self,o,i,is) >> Print(Blanks(i),
-	self(o.loc,i,is), ".", o.elem, "[", o.idx, "]");
+CUnparser.TSparse := (self,t, vars,i,is) >> Print(Blanks(i),
+	"struct sparse_arr", self.infix(vars, ", ", i + is));
+
+CUnparser.struct_nth := (self,o,i,is) >> Cond(o.idx <> "", Print(Blanks(i),
+	self(o.loc,i,is), ".", o.elem, "[", o.idx, "]"), Print(Blanks(i),
+	self(o.loc,i,is), ".", o.elem));
 
 CUnparser.if4 := (self,o,i,is) >> Print(Blanks(i),
     "if (", self(o.if_cond,i,is), ") {\n", self(o.if_cmd,i+is,is), Blanks(i), "}",
@@ -863,16 +878,40 @@ DefaultCodegen.SPLScope := (self, o, y, x, opts) >>
 #Overridden Codegen from SpiralDefaults
 DefaultCodegen.ISumAcc := (self, o, y, x, opts) >> let(ii := Ind(), chain(loop(ii, Rows(o), assign(nth(y, ii), V(0))), loopf(o.var, V(0), o.domain, self._acc(self(o.child(1), y, x, opts), y))));
 
-#DefaultCodegen.RowVec := (self, o, y, x, opts) >> Cond(IsSparseT(o.element.var), let(i := Ind(), 
+DefaultCodegen.RowVec := (self, o, y, x, opts) >> Cond(IsSparseT(o.element.var) and IsSparseT(opts.XType.t), let(i := Ind(), j := Ind(),
+v := o.element.var.get_var(), t := var.fresh_t("t", TInt),
+decl([v, i, j, t], chain(assign(t, V(0)), loopw(logic_and(lt(i, o.element.var.length(v)), lt(j, o.element.var.length(x))), 
+	if3(lt(o.element.var.get_elem_index(v, i), o.element.var.get_elem_index(x, j)),
+			assign(i, add(i, V(1))), 
+			lt(o.element.var.get_elem_index(x, j), o.element.var.get_elem_index(v, i)), 
+			assign(j, add(j, V(1))), 
+			chain(assign(t, mul(o.element.var.get_elem_value(v, i), o.element.var.get_elem_value(x, j))), 
+			assign(i, add(i, V(1))), assign(j, add(j, V(1)))))), assign(nth(y, 0), t)))), 
+IsSparseT(o.element.var) and IsSparseT(opts.XType.t) = false,
+	let(i := Ind(), v := o.element.var.get_var(), t := var.fresh_t("t", TInt), 
+		decl([v, i, t], chain(assign(t, V(0)), loopw(lt(i, o.element.var.length(v)), 
+		chain(assign(t, mul(o.element.var.get_elem_value(v, i), nth(x,o.element.var.get_elem_index(v, i)))), 
+		assign(i, add(i, V(1))))), assign(nth(y, 0), t)))), 
+IsSparseT(o.element.var) = false and IsSparseT(opts.XType.t),
+	let(i := Ind(), t := var.fresh_t("t", TInt), 
+		decl([i, t], chain(assign(t, V(0)), loopw(lt(i, x.t.t.length(x)), 
+		chain(assign(t, mul(x.t.t.get_elem_value(x, i), o.element.at(x.t.t.get_elem_index(x, i)))), 
+		assign(i, add(i, V(1))))), assign(nth(y, 0), t)))),
+let(i := Ind(),
+   	func := o.element.lambda(),
+   	t := TempVar(x.t.t),
+  	chain(assign(t, 0), loop(i, func.domain(), assign(t, add(t, mul(func.at(i), nth(x, i))))), assign(nth(y, 0), t)))
+);
+
 #	v := var.fresh_t("v", TArray(TInt, o.element.domain())),
 #	t := TempVar(x.t.t),
 #	decl([v,t], chain(assign(t, 0), 
 #	loopw(lt(t, o.element.domain()), 
 #	chain(if1(logic_and(neq(nth(v, i), V(0)), neq(nth(x,i), V(0))), assign(t, add(t, mul(nth(v,i), nth(x,i))))) , assign(nth(y,0), t)))))), 
 #	let(i := Ind(),
-#   	func := o.element.lambda(),
+#   func := o.element.lambda(),
 #   	t := TempVar(x.t.t),
-#   	chain(assign(t, 0), loop(i, func.domain(), assign(t, add(t, mul(func.at(i), nth(x, i))))), assign(nth(y, 0), t)) )); 
+#  	chain(assign(t, 0), loop(i, func.domain(), assign(t, add(t, mul(func.at(i), nth(x, i))))), assign(nth(y, 0), t)))); 
 
 DefaultCodegen.TSparse_Matrix := meth(self, o, y, x, opts)
     local i, j, k, n, b;
@@ -1012,16 +1051,16 @@ DefaultCodegen.sparse_nth2 := meth(self, o, y, x, opts)
 
 
 
-#SparseDefaults := CopyFields(SpiralDefaults, rec(
-#  compileStrategy := GraphIndicesCS,
-#  X := var("sa", TPtr(TSparse(TArray(TInt, 1), TSemiring_Arithmetic, 1))),
-#  XType := TPtr(TSparse(TArray(TInt, 1), TSemiring_Arithmetic, 1)),
-#  arrayDataModifier := "",
-#  arrayBufModifier := "",
-#  Y := var("res", TPtr(TInt)),
-#  YType := TPtr(TInt),
+SparseDefaults := CopyFields(SpiralDefaults, rec(
+  compileStrategy := GraphIndicesCS,
+  X := var("X", TPtr(TSparse(TArray(TInt, 5), TSemiring_Arithmetic(TInt)))),
+  XType := TPtr(TSparse(TArray(TInt, 5), TSemiring_Arithmetic(TInt))),
+  arrayDataModifier := "",
+  arrayBufModifier := "",
+  Y := var("Y", TPtr(TInt)),
+  YType := TPtr(TInt),
 #  isCSR := true,
 #  includes := ["<sparse.h>"],
 #  #symbol := ["struct_array sa2"]
-#));
+));
 
