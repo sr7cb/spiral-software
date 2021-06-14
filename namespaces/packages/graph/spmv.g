@@ -1,0 +1,15 @@
+Load(graph);
+Import(graph);
+opts := SpiralDefaults;
+opts.useDeref := false;
+opts.globalUnrolling := 0;
+n := var.fresh_t("n", TInt);
+opts.symbol := [n];
+ts := TSparse(TArray(TInt, 5), TSemiring_Arithmetic(TInt));
+fdos := FDataSparseOfs(ts, 5, 0);
+rv := RowVec(fdos);
+tsm := TSparse_Matrix(ts, TSemiring_Arithmetic(TInt));
+hs := HyperSprase(rv, tsm);
+hs.ruletree := rec();
+cs := CodeSums(hs, opts);
+PrintCode("spmv", cs, opts);

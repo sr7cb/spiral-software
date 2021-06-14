@@ -203,7 +203,7 @@ Class(FDataSparseOfs, Function, rec(
        self := arg[1],
        object := arg[2],
 	   len := arg[3],
-       ofs := arg[4],
+       ofs := toExpArg(arg[4]),
 	   WithBases(self, rec(var := object, len := len, ofs := ofs, operations := PrintOps))),
 
    print := self >> Print(self.name, "(", self.var, ", ", self.len, ", ", self.ofs, ")"),
@@ -455,11 +455,14 @@ INF := arg -> Cond(
 #	print := (self, i, si) >> Print(self.name),
 #));
 
+IsMaskT := x ->  IsBound(x.isMaskT) and x.isMaskT;
+
 Class(Mask, Diag, rec(
 	__call__ := (self, func) >> SPL(WithBases(self, rec(
 		element := func,
 		var := func.var,
 	))),
+	isMaskT := true,
 	print := (self, i, si) >> Print(self.name, "(", self.element, ")"),
 	index := (self, i, j, dom) >> nth(self.var, add(mul(dom, i), j)),
 ));
@@ -490,6 +493,23 @@ Class(SPLScope, Buf, rec(
 ));
 
 
+Declare(TSparse_Matrix);
+
+Class(HyperSprase, BaseOperation, rec(
+	__call__ := arg >> let(
+    self := arg[1],
+    vector := arg[2],
+	matrix := arg[3],
+
+	WithBases(self, rec(vector := vector, matrix := matrix, _children := [vector, matrix], operations := PrintOps))),
+	
+   	isSparseT := true,
+   	print := self >> Print(self.name, "(", self.vector, ", ", self.matrix, ")"),
+   	dims := self >> self.vector.dims(),
+
+));
+
+
 Class(SparseBlk, SumsBase, Mat, rec(
 	new := (self, M) >> SPL(WithBases(self, rec(
 			data_type := M.object,
@@ -511,6 +531,13 @@ Class(SparseBlk, SumsBase, Mat, rec(
 #	dims := self >> [self.params[2]
 #))
 
+Declare(RulesSPLScope);
+Declare(RulesMask);
+
+Class(SparseVectorMatrixMultplication, TaggedNonTerminal, rec(
+	abbrevs := [(n) -> [n]], 
+));
+
 Class(TSparse_Mat, TaggedNonTerminal, rec(
 	abbrevs := [(n) -> [n]],
 	isReal := self>>true,
@@ -524,6 +551,39 @@ Class(Trace, TaggedNonTerminal, rec(
 	print := (self, i , si) >> Print(self.name, "(", self.params[1], ")")
 ));
 
+Class(MatrixMultiply, TaggedNonTerminal, rec(
+	abbrevs := [(n,n, p) -> [n,n, p]],
+	isReal := self >> true,
+	dims := self >> self.params[1] * self.params[2],
+	print := (self, i , si) >> Print(self.name, "(", self.params[1], ", ", self.params[2], Checked(self.params[3] <> "", Print(", ", self.params[3])), ")")
+));
+
+#NewRulesFor(MatrixMultiply, rec(
+#	 matmul := rec(
+#		 info := "Matrix Multplication",
+#		 maxSize := false,
+#		 applicable := (self, nt) >> Cond(nt.params[3] = "", true, false),
+#		 apply := (nt, c, cnt) -> let(i := Ind(3), j := Ind(3), scat := Scat(fTensor(fBase(i), fBase(j))), 
+#		 gath := Gath(fStack(fTensor(fBase(i), fId(3)), fTensor(fId(3), fBase(j)))), scp := SPLScope.freshScope(),
+#		 kernel := scat * SPLScope(RowVec(FDataOfs(scp,6,V(3))), scp)  * gath, kernel2 := Rewrite(kernel, RulesSPLScope, opts), ISum(i, 3, ISum(j, 3, kernel2)))
+#	 ),
+#	 maskedmxm := rec(
+#		 info := "Masked Matrix Multplication",
+#		 maxSize := false,
+#		 applicable := (self, nt) >> Cond(IsSPL(nt.params[3]), IsMaskT(nt.params[3]), false),
+#		 apply := (nt, c, cnt) -> let(
+#								i := Ind(3),
+#								j := Ind(3),
+#								scat := Scat(fTensor(fBase(i), fBase(j))), 
+#								gath := Gath(fStack(fTensor(fBase(i), fId(3)), fTensor(fId(3), fBase(j)))),
+#								scp := SPLScope.freshScope(),
+#								kernel := scat * SPLScope(RowVec(FDataOfs(scp,6,V(3))), scp) * gath,
+#								mxm := ISum(i, 3, ISum(j, 3, kernel)),
+#								maskedmxm := Mask(FDataOfs(M, 9, 0)) * mxm,
+#								maskedmxm2 := Rewrite(maskedmxm, RulesMask, opts),
+#								maskedmxm3 := Rewrite(maskedmxm2, RulesSPLScope, opts), maskedmxm3)
+#	 )
+#));
 
 
 NewRulesFor(Trace, rec(
@@ -536,7 +596,6 @@ NewRulesFor(Trace, rec(
 	)
 ));
 
-Declare(TSparse_Matrix);
 
 NewRulesFor(TSparse_Mat, rec(
 	csr := rec(
@@ -568,6 +627,8 @@ Class(Ttrace, BaseOperation, rec(
 	rSetChild := rSetChildFields("object"),
 ));
 
+IsSparseT := x -> IsType(x) and IsBound(x.isSparseT) and x.isSparseT;
+
 Class(TSparse_Matrix, BaseOperation, rec(
    #__call__ := arg >> let( 
 	#    size := arg[2],
@@ -578,16 +639,20 @@ Class(TSparse_Matrix, BaseOperation, rec(
 	
 	__call__ := arg >> let(
        self := arg[1],
-       size := arg[3],
-	   element := TArray(arg[2], arg[3]),
-       prop := Cond(IsList(arg[4]), arg[4], [arg[4]]),
-	   WithBases(self, rec(size := size, element := element, prop := prop, operations := PrintOps))),
+       size := arg[2].size(),
+	   element := TArray(arg[2], size),
+       prop := Cond(IsList(arg[3]), arg[3], [arg[3]]),
+	   WithBases(self, rec(size := size, element := element, prop := prop, _children := [arg[2], prop], operations := PrintOps))),
 	
-   print := self >> Print(self.name, "(", self.element, ", ", self.prop, ")"),
-   dims := self >> [self.size, self.element.size],
+   	isSparseT := true,
+   	print := self >> Print(self.name, "(", self.element, ", ", self.prop, ")"),
+   	dims := self >> [self.size, self.element.size],
+
+	traverse_outer := (self, i, j, var, body) >>  loopf(j, nth(var,i), nth(var, add(i, V(1))), chain(body)),
+	index_row := (self, var, n, i) >> nth(var, add(n, add(V(1), i))),
+	index_val := (self, var, n, j) >> nth(var, add(n, add(nth(var, n), add(j, V(1))))),
 ));
 
-IsSparseT := x -> IsType(x) and IsBound(x.isSparseT) and x.isSparseT;
 
 Declare(inref);
 
@@ -620,6 +685,9 @@ Class(TSparse, TArrayBase, rec(
 	get_elem_index := (self, x, idx) >> struct_nth(inref(x), "index", idx),
 
 	get_elem_value := (self, x, idx) >> struct_nth(inref(x), "value", idx),
+
+	traversal := (self, i, low, high, body) >> loopf(i, low, high, chain(body)),
+
 	#num_nonzeros := (self, x) >> let( 
 	#	itr := var.fresh_t("itr", TInt),
 	#	result := var.fresh_t("result", TInt),
@@ -749,7 +817,7 @@ RewriteRules(RulesTrace, rec(
 #[let(scat := e._children[1], s := e._children[2], g := e._children[3].func, newscope := SPLScope(RowVec(diagMul(fCompose(s.spl.element._children[1], g._children[2]))), s.scope), newscope * Gath(g._children[1]))]),
 RewriteRules(RulesSPLScope, rec(
 	move_inside_gath := ARule(Compose, [@(1, SPLScope, e-> 
-		let(check := Collect(e.spl, @@(1, var, (s, cx) -> s = e.scope and cx.FDataOfs[1].var <> s)), Length(check) = 0)), 
+		let(check1 := Collect(e.spl, FDataOfs), check2 := Collect(e.spl, @@(1, var, (s, cx) -> s = e.scope and cx.FDataOfs[1].var <> s)), Length(check1) > 0 and Length(check2) = 0)), 
 		[@(2,Gath, e-> Length(e.func._children) = 2 and e.func._children[1].domain() = e.func._children[2].domain()), @(3, fStack)]], 
 			e -> [let(scat := e._children[1], 
 					s := e._children[2], 
@@ -859,13 +927,15 @@ DefaultSumsGen.TSparse := (self, o, opts) >> o;
 DefaultSumsGen.sparse_nth2 := (self, o, opts) >> o;
 
 #DefaultSumsGen.RowVec := (self, o, opts) >> let(n := Ind(o.element._children[1].len), Error(), ISumAcc(n, o.element._children[1].len, ScatAcc(o.element)));
-DefaultSumsGen.RowVec := (self, o, opts) >> let(i := Ind(o.element.domain()), ISumAcc(i, o.element.domain(), Scat(fId(1)) * Blk1(o.element.at(i))) * Gath(fBase(i)));
+DefaultSumsGen.RowVec := (self, o, opts) >> Cond(let(c := Collect(o, @(1,var, e -> IsSparseT(e))), Length(c) > 0), o, let(i := Ind(o.element.domain()), ISumAcc(i, o.element.domain(), Scat(fId(1)) * Blk1(o.element.at(i))) * Gath(fBase(i))));
 
 DefaultSumsGen.RowVec2 := (self, o, opts) >> o;
 
 DefaultSumsGen.Ttrace := (self, o, opts) >> o;
 
 DefaultSumsGen.TSpars_Matrix := (self, o, opts) >> o;
+
+DefaultSumsGen.HyperSprase := (self, o, opts) >> o;
 
 DefaultSumsGen.SPLScope := (self, o, opts) >> SPLScope(self(o.child(1), opts), o.scope);
 
@@ -878,9 +948,25 @@ DefaultCodegen.SPLScope := (self, o, y, x, opts) >>
 #Overridden Codegen from SpiralDefaults
 DefaultCodegen.ISumAcc := (self, o, y, x, opts) >> let(ii := Ind(), chain(loop(ii, Rows(o), assign(nth(y, ii), V(0))), loopf(o.var, V(0), o.domain, self._acc(self(o.child(1), y, x, opts), y))));
 
+
+DefaultCodegen.HyperSprase := meth(self, o, y, x, opts) 
+	local v, x, i, j, itr; 
+	v := o.vector.element.var.get_var();
+	itr := var.fresh_t("itr", TInt);
+	Concat(opts.symbol, [v]);
+	i := Ind();
+	j := Ind();
+	return decl([v,i,j,itr], chain(assign(itr, V(0)), o.vector.element.var.traversal(i, V(0), opts.symbol[1], 
+				if1(eq(o.vector.element.var.get_elem_index(v, itr), i), chain(  
+					o.matrix.traverse_outer(i,j,x,assign(nth(y, nth(x, add(opts.symbol[1], add(V(1), j)))), add(nth(y, nth(x, add(opts.symbol[1], add(V(1), j)))), 
+					mul(o.matrix.index_val(x,opts.symbol[1], j), o.vector.element.var.get_elem_value(v, itr))))),
+					assign(itr, add(itr, V(1))))))));
+end;
+
+
 DefaultCodegen.RowVec := (self, o, y, x, opts) >> Cond(IsSparseT(o.element.var) and IsSparseT(opts.XType.t), let(i := Ind(), j := Ind(),
 v := o.element.var.get_var(), t := var.fresh_t("t", TInt),
-decl([v, i, j, t], chain(assign(t, V(0)), loopw(logic_and(lt(i, o.element.var.length(v)), lt(j, o.element.var.length(x))), 
+decl([v, i, j, t], chain(assign(t, V(0)), assign(i, V(0)), assign(j, V(0)), loopw(logic_and(lt(i, o.element.var.length(v)), lt(j, o.element.var.length(x))), 
 	if3(lt(o.element.var.get_elem_index(v, i), o.element.var.get_elem_index(x, j)),
 			assign(i, add(i, V(1))), 
 			lt(o.element.var.get_elem_index(x, j), o.element.var.get_elem_index(v, i)), 
@@ -889,12 +975,12 @@ decl([v, i, j, t], chain(assign(t, V(0)), loopw(logic_and(lt(i, o.element.var.le
 			assign(i, add(i, V(1))), assign(j, add(j, V(1)))))), assign(nth(y, 0), t)))), 
 IsSparseT(o.element.var) and IsSparseT(opts.XType.t) = false,
 	let(i := Ind(), v := o.element.var.get_var(), t := var.fresh_t("t", TInt), 
-		decl([v, i, t], chain(assign(t, V(0)), loopw(lt(i, o.element.var.length(v)), 
+		decl([v, i, t], chain(assign(t, V(0)), assign(i, V(0)), loopw(lt(i, o.element.var.length(v)), 
 		chain(assign(t, mul(o.element.var.get_elem_value(v, i), nth(x,o.element.var.get_elem_index(v, i)))), 
 		assign(i, add(i, V(1))))), assign(nth(y, 0), t)))), 
 IsSparseT(o.element.var) = false and IsSparseT(opts.XType.t),
 	let(i := Ind(), t := var.fresh_t("t", TInt), 
-		decl([i, t], chain(assign(t, V(0)), loopw(lt(i, x.t.t.length(x)), 
+		decl([i, t], chain(assign(t, V(0)), assign(i, V(0)), loopw(lt(i, x.t.t.length(x)), 
 		chain(assign(t, mul(x.t.t.get_elem_value(x, i), o.element.at(x.t.t.get_elem_index(x, i)))), 
 		assign(i, add(i, V(1))))), assign(nth(y, 0), t)))),
 let(i := Ind(),

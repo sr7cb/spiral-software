@@ -25,5 +25,3 @@ PrintCode("mxm", cs, opts);
 #kernel := scat * SPLScope(RowVec(diagMul(FDataOfs(scp,6,V(3)))* gath), scp);
 
 #scp.dims := (self) >> [6];
-
-kernel2 := Rewrite(kernel, RulesSPLScope, opts),
