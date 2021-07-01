@@ -20,7 +20,8 @@ struct sparse_vec {
 //    }
 //}
 
-void spmv(int  *Y, int  *X, struct sparse_vec *spr_arr1, int n1) {
+
+/*void spmv(int  *Y, int  *X, int n1, struct sparse_vec *spr_arr1) {
     int i5, i6, itr1;
     itr1 = 0;
     for (int i5 = 0; i5 < n1; i5++) {
@@ -31,10 +32,32 @@ void spmv(int  *Y, int  *X, struct sparse_vec *spr_arr1, int n1) {
             itr1 = (itr1 + 1);
         }
     }
+}*/
+
+void spmv(int  *Y, int  *X, int n1, struct sparse_vec *spr_arr1) {
+    int itr1 = 0;
+    for(int i5 = 0; i5 < n1; i5++) {
+        if ((((*spr_arr1).index[itr1] == i5))) {
+            int diff = X[(i5 + 1)] - X[i5];
+            int T1[diff];
+            int T2[diff];
+            for (int i6 = X[i5]; i6 < X[(i5 + 1)]; i6++) {
+                T2[i6-X[i5]] = X[(n1 + (X[n1] + (i6 + 1)))];
+            }
+            for(int i7 = 0; i7 < diff; i7++) {
+                T1[i7] = ((*spr_arr1).value[itr1]*T2[i7]);
+            }
+            for(int i9 =  X[i5]; i9 < X[(i5 + 1)]; i9++) {
+                Y[X[(n1 + (1 + i9))]] = (Y[X[(n1 + (1 + i9))]] + T1[i9-X[i5]]);
+            }
+            itr1 = itr1 +1;
+        } 
+    }
 }
 
+
 int main() {
-    int * output = malloc(3 * sizeof(int));
+    int* output = malloc(3 * sizeof(int));
     int * input = malloc(12 * sizeof(int));
     /* 6    0   2
        0    0   0  
@@ -62,13 +85,12 @@ int main() {
     (*a).value[1] = 2;
     (*a).length = 3;
 
-
     for(int i = 0; i < 3; i++){
         output[i] = 0;
     }
 
     //mxm2(output, input, input2);
-    spmv(output, input, a, 3);
+    spmv(output, input, 3, a);
     printf("\n");
     for(int i = 0; i < 3; i++) {
             printf("%d\t", output[i]);
