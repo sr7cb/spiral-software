@@ -12,12 +12,13 @@ ts := TSparse(TArray(TInt, 5), TSemiring_Arithmetic(TInt));
 fdos := FDataSparseOfs(ts, 5, 0);
 spa := fdos.var.get_var();
 opts.symbol :=opts.symbol::[spa];
-diag := Diag(fConst(TInt, 3, fdos.var.get_elem_value(spa, itr)));
+diag := Diag(fConst(TInt, 3, fdos.var.get_elem_value(spa, i)));
 g := Gath(fTensor(fId(3), fBase(i))); 
-spmv := ISum(i, opts.symbol[1], sa * COND(eq(fdos.var.get_elem_index(spa, itr), i), diag, O(i, i.range)) * g);
+spmv := ISum(i, fdos.var.length(spa), sa * diag * g.toloop(1));
 rt := RandomRuleTree(last, opts);
 srt := SumsRuleTree(rt, opts);
 cs := CodeSums(srt, opts);
 PrintCode("spmv", cs, opts);
 
 #sa := ScatAcc(fTensor(fId(3), fBase(i))); #Function is wrong should be in 1 variable as we return a vector
+#spmv := ISum(i, opts.symbol[1], sa * COND(eq(fdos.var.get_elem_index(spa, itr), i), diag, O(i, i.range)) * g);

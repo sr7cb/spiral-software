@@ -6,8 +6,8 @@ opts.globalUnrolling := 0;
 n := var.fresh_t("n", TInt);
 opts.symbol := [n];
 i := Ind(3);
-t:= var.fresh_t("t", TPtr(TInt));
-fdataofs := FDataOfs(t, 3, 0);
+ts := TSparse(TArray(TInt, 3), TSemiring_Arithmetic(TInt));
+fdataofs := FDataOfs(ts, 3, 0);
 md := MakeDiag(fdataofs);
 eye := I(i);
 sid := SUM(eye, md);
@@ -18,7 +18,9 @@ spmv2 := Rewrite(spmv, RulesIDiag, opts);
 spmv3 := Rewrite(spmv2, RulesMatMul, opts);
 rt := RandomRuleTree(last, opts);
 srt := SumsRuleTree(rt, opts);
-cs := CodeSums(srt, opts);
+srt2 := Rewrite(srt, RulesSigSPMV1, opts);
+srt3 := Rewrite(Copy(srt2), RulesSigSPMV2, opts);
+cs := CodeSums(last, opts);
 PrintCode("spmv", cs, opts);
 
 #sa := ScatAcc(fTensor(fId(3), fBase(i))); #Function is wrong should be in 1 variable as we return a vector

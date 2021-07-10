@@ -819,15 +819,35 @@ Class(RulesMR2, RuleSet);
 Class(RulesMask, RuleSet);
 Class(RulesIDiag, RuleSet);
 Class(RulesMatMul, RuleSet);
+Class(RulesSigSPMV1, RuleSet);
+Class(RulesSigSPMV2, RuleSet);
 
 
 RewriteRules(RulesIDiag, rec(
-	convert_I := ARule(SUM, [@(1,I), @(2, MakeDiag)], e-> [let(j := Ind(@(1).val.obj.size), ivs := IterVStack(j, Gath(fTensor(fId(j.range), fBase(j)))), SUM(ivs, @(2).val))]),
+	convert_I := ARule(SUM, [@(1,I), @(2, MakeDiag)], e-> [let(j := Ind(@(1).val.obj.size), ivs := IterVStack(j, @(2).val.element.len, Gath(fTensor(fId(@(2).val.element.len), fBase(j)))), SUM(ivs, @(2).val))]),
 ));
 
 RewriteRules(RulesMatMul, rec(
-	consume_matmul := ARule(Compose, [@(1,MatMul), [@(2,SUM), @(3,IterVStack), @(4,MakeDiag)]], e->[Error()]),
+	consume_matmul := ARule(Compose, [@(1,MatMul), [@(2,SUM), @(3,IterVStack), @(4,MakeDiag)]], e->[let(f := @(4).val.element, i := @(3).val.var, g := @(3).val._children[1],
+																					IterVStack(i, f.len, Diag(fConst(i.t, f.len, f)) * g.toloop(1)))]),
 ));
+
+RewriteRules(RulesSigSPMV1, rec(
+	remove_extra_isum := Rule([@(1,Compose), @(2, ISum), @(3,ISum)], e->@(3).val),
+));
+
+RewriteRules(RulesSigSPMV2, rec(
+		rebuild_with_var := Rule([@(1,ISum), [@(2,ISum), [@(3,Compose), @(4,Scat), @(5,Diag, e-> Length(Collect(e, FDataOfs)) > 0),@(6,Gath)]]], e-> let(f := @(5).val.element.params[3], v1 := @(1).val.var, v2 := @(2).val.var, 
+																												spa := f.var.get_var(), d := Diag(fConst(v2.t, 1, f.var.get_elem_value(spa, v1))),
+																												func := fTensor(fBase(@(2).val.var), fBase(@(1).val.var)),
+																												sa := ScatAcc(func), g := Gath(func),
+																												result := ISum(v1, f.var.length(spa), ISum(v2, nth(X, add(f.var.get_elem_index(spa, v2), V(1))), sa * d * g)),
+																												result)),
+));
+
+
+#																								func := fTensor(fId(1), fBase(@(1).val.var)), 
+#																								sa := ScatAcc(func), g := Gath(func),
 #comments for rulesmxmtrace
 #cis := Rule([ISum, [ISum, @(1)]], e -> [let(rec(result := ISumAcc(e.var, e.domain, @(1).val)), result)]),
 #remove_trace := ARule(Compose, [@(1, RowVec), @(2, Gath), @(3,ISum)], e->[@(3).val]),
@@ -1023,16 +1043,16 @@ DefaultSumsGen.HyperSprase := (self, o, opts) >> o;
 DefaultSumsGen.Reduce := (self, o ,opts) >> RowVec(fConst(o.t, o.size, 1));
 
 
-DefaultSumsGen.IterVStack := (self, o, opts) >> Cond(let(c := Collect(o, TSparse), Length(c) > 0), o, let(
-	bkcols := Cols(o.child(1)),
-	bkrows := Rows(o.child(1)),
-	nblocks := o.domain,
-	cols := Cols(o), rows := Rows(o),
-	ISum(o.var, o.domain,
-	    Scat(fTensor(fBase(nblocks, o.var), fId(bkrows))) *
-	    self(o.child(1), opts) *
-	    Gath(fId(bkcols)))
-    ));
+#DefaultSumsGen.IterVStack := (self, o, opts) >> Cond(let(c := Collect(o, TSparse), Length(c) > 0), o, let(
+#	bkcols := Cols(o.child(1)),
+#	bkrows := Rows(o.child(1)),
+#	nblocks := o.domain,
+#	cols := Cols(o), rows := Rows(o),
+#	ISum(o.var, o.domain,
+#	    Scat(fTensor(fBase(nblocks, o.var), fId(bkrows))) *
+#	    self(o.child(1), opts) *
+#	    Gath(fId(bkcols)no))
+#    ));
 
 DefaultSumsGen.SPLScope := (self, o, opts) >> SPLScope(self(o.child(1), opts), o.scope);
 
@@ -1158,29 +1178,42 @@ DefaultCodegen.VStack := meth(self, o, y, x, opts)
 	));
 	end;
 
-
 DefaultCodegen.Gath := meth(self, o, y, x, opts)
-	local i, index_i, index_j;
+	local i, index_j;
 	i := Ind();
-	index_j := o.func._children[2].params[2];
-	return decl([], chain(
-		loopf(i, nth(x, index_j), nth(x, add(index_j, V(1))), chain(
-			assign(nth(y, sub(i, nth(x, index_j))), nth(x, add(opts.symbol[1], add(nth(x,opts.symbol[1]), add(i, V(1))))))
-		))
-	));
+	index_j := o.func._children[1].params[2];
+	return loop(i, o.func.domain(), assign(nth(y, i), nth(x, add(opts.symbol[1], add(nth(x,opts.symbol[1]), add(index_j, V(1)))))));
 end;
-
-DefaultCodegen.Scat := meth(self, o, y, x, opts) 
-	local i, index_i, index_j;
+DefaultCodegen.Scat := meth(self, o, y, x, opts)
+	local i, index_j;
 	i := Ind();
-	index_j := o.func._children[2].params[2];
-	return decl([], chain(
-		loopf(i, nth(x, index_j), nth(x, add(index_j, V(1))), chain(
-			assign(nth(y,nth(x, add(opts.symbol[1], add(V(1), i)))), nth(x, sub(i, nth(x, index_j))))
-		))
-	));
+	index_j := o.func._children[1].params[2];
+	return loop(i, o.func.domain(), assign(nth(y,nth(X, add(opts.symbol[1], add(V(1), index_j)))), nth(x, i)));
 end;
-
+#
+#
+#DefaultCodegen.Gath := meth(self, o, y, x, opts)
+#	local i, index_i, index_j;
+#	i := Ind();
+#	index_j := o.func._children[2].params[2];
+#	return decl([], chain(
+#		loopf(i, nth(x, index_j), nth(x, add(index_j, V(1))), chain(
+#			assign(nth(y, sub(i, nth(x, index_j))), nth(x, add(opts.symbol[1], add(nth(x,opts.symbol[1]), add(i, V(1))))))
+#		))
+#	));
+#end;
+#
+#DefaultCodegen.Scat := meth(self, o, y, x, opts) 
+#	local i, index_i, index_j;
+#	i := Ind();
+#	index_j := o.func._children[2].params[2];
+#	return decl([], chain(
+#		loopf(i, nth(x, index_j), nth(x, add(index_j, V(1))), chain(
+#			assign(nth(y,nth(x, add(opts.symbol[1], add(V(1), i)))), nth(x, sub(i, nth(x, index_j))))
+#		))
+#	));
+#end;
+#
 #DefaultCodegen.RowVec2 := meth(self, o, y, x, opts)
 #	local body, result, sa;
 #	sa := var.fresh_t("sa", TArray(TInt, o.element.object.size));
